@@ -39,6 +39,9 @@
 
 #include <linux/wireless.h>
 #include <net/cfg80211.h>
+#include <net/mac80211.h>
+#include <net/ieee80211_radiotap.h>
+#include <net/mac80211/ieee80211_i.h>
 #include "sap_api.h"
 #include "wlan_hdd_wmm.h"
 #include <cdp_txrx_cmn.h>
@@ -490,6 +493,231 @@ hdd_drop_tx_packet_on_ftm(struct sk_buff *skb)
 }
 #endif
 
+static bool ieee80211_validate_radiotap_len(struct sk_buff *skb)
+{
+	struct ieee80211_radiotap_header *rthdr =
+		(struct ieee80211_radiotap_header *)skb->data;
+
+	/* check for not even having the fixed radiotap header part */
+	if (unlikely(skb->len < sizeof(struct ieee80211_radiotap_header)))
+		return false; /* too short to be possibly valid */
+
+	/* is it a header version we can trust to find length from? */
+	if (unlikely(rthdr->it_version))
+		return false; /* only version 0 is supported */
+
+	/* does the skb contain enough to deliver on the alleged length? */
+	if (unlikely(skb->len < ieee80211_get_radiotap_len(skb->data)))
+		return false; /* skb too short for claimed rt header extent */
+
+	return true;
+}
+
+bool ieee80211_parse_tx_radiotap(struct sk_buff *skb,
+				 struct net_device *dev)
+{
+	struct ieee80211_radiotap_iterator iterator;
+	struct ieee80211_radiotap_header *rthdr =
+		(struct ieee80211_radiotap_header *) skb->data;
+	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+	int ret = ieee80211_radiotap_iterator_init(&iterator, rthdr, skb->len,
+						   NULL);
+	u16 txflags;
+	u16 rate = 0;
+	bool rate_found = false;
+	u8 rate_retries = 0;
+	u16 rate_flags = 0;
+	u8 mcs_known, mcs_flags, mcs_bw;
+	u16 vht_known;
+	u8 vht_mcs = 0, vht_nss = 0;
+	int i;
+	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+
+	if (!ieee80211_validate_radiotap_len(skb))
+		return false;
+
+	info->flags |= IEEE80211_TX_INTFL_DONT_ENCRYPT |
+		       IEEE80211_TX_CTL_DONTFRAG;
+
+	/*
+	 * for every radiotap entry that is present
+	 * (ieee80211_radiotap_iterator_next returns -ENOENT when no more
+	 * entries present, or -EINVAL on error)
+	 */
+
+	while (!ret) {
+		ret = ieee80211_radiotap_iterator_next(&iterator);
+
+		if (ret)
+			continue;
+
+		/* see if this argument is something we can use */
+		switch (iterator.this_arg_index) {
+		/*
+		 * You must take care when dereferencing iterator.this_arg
+		 * for multibyte types... the pointer is not aligned.  Use
+		 * get_unaligned((type *)iterator.this_arg) to dereference
+		 * iterator.this_arg for type "type" safely on all arches.
+		*/
+		case IEEE80211_RADIOTAP_FLAGS:
+			if (*iterator.this_arg & IEEE80211_RADIOTAP_F_FCS) {
+				/*
+				 * this indicates that the skb we have been
+				 * handed has the 32-bit FCS CRC at the end...
+				 * we should react to that by snipping it off
+				 * because it will be recomputed and added
+				 * on transmission
+				 */
+				if (skb->len < (iterator._max_length + FCS_LEN))
+					return false;
+
+				skb_trim(skb, skb->len - FCS_LEN);
+			}
+			if (*iterator.this_arg & IEEE80211_RADIOTAP_F_WEP)
+				info->flags &= ~IEEE80211_TX_INTFL_DONT_ENCRYPT;
+			if (*iterator.this_arg & IEEE80211_RADIOTAP_F_FRAG)
+				info->flags &= ~IEEE80211_TX_CTL_DONTFRAG;
+			break;
+
+		case IEEE80211_RADIOTAP_TX_FLAGS:
+			txflags = get_unaligned_le16(iterator.this_arg);
+			if (txflags & IEEE80211_RADIOTAP_F_TX_NOACK)
+				info->flags |= IEEE80211_TX_CTL_NO_ACK;
+			if (txflags & IEEE80211_RADIOTAP_F_TX_NOSEQNO)
+				info->control.flags |= IEEE80211_TX_CTRL_NO_SEQNO;
+			if (txflags & IEEE80211_RADIOTAP_F_TX_ORDER)
+				info->control.flags |=
+					IEEE80211_TX_CTRL_DONT_REORDER;
+			break;
+
+		case IEEE80211_RADIOTAP_RATE:
+			rate = *iterator.this_arg;
+			rate_flags = 0;
+			rate_found = true;
+			break;
+
+		case IEEE80211_RADIOTAP_DATA_RETRIES:
+			rate_retries = *iterator.this_arg;
+			break;
+
+		case IEEE80211_RADIOTAP_MCS:
+			mcs_known = iterator.this_arg[0];
+			mcs_flags = iterator.this_arg[1];
+			if (!(mcs_known & IEEE80211_RADIOTAP_MCS_HAVE_MCS))
+				break;
+
+			rate_found = true;
+			rate = iterator.this_arg[2];
+			rate_flags = IEEE80211_TX_RC_MCS;
+
+			if (mcs_known & IEEE80211_RADIOTAP_MCS_HAVE_GI &&
+			    mcs_flags & IEEE80211_RADIOTAP_MCS_SGI)
+				rate_flags |= IEEE80211_TX_RC_SHORT_GI;
+
+			mcs_bw = mcs_flags & IEEE80211_RADIOTAP_MCS_BW_MASK;
+			if (mcs_known & IEEE80211_RADIOTAP_MCS_HAVE_BW &&
+			    mcs_bw == IEEE80211_RADIOTAP_MCS_BW_40)
+				rate_flags |= IEEE80211_TX_RC_40_MHZ_WIDTH;
+
+			if (mcs_known & IEEE80211_RADIOTAP_MCS_HAVE_FEC &&
+			    mcs_flags & IEEE80211_RADIOTAP_MCS_FEC_LDPC)
+				info->flags |= IEEE80211_TX_CTL_LDPC;
+
+			if (mcs_known & IEEE80211_RADIOTAP_MCS_HAVE_STBC) {
+				u8 stbc = u8_get_bits(mcs_flags,
+						      IEEE80211_RADIOTAP_MCS_STBC_MASK);
+
+				info->flags |=
+					u32_encode_bits(stbc,
+							IEEE80211_TX_CTL_STBC);
+			}
+			break;
+
+		case IEEE80211_RADIOTAP_VHT:
+			vht_known = get_unaligned_le16(iterator.this_arg);
+			rate_found = true;
+
+			rate_flags = IEEE80211_TX_RC_VHT_MCS;
+			if ((vht_known & IEEE80211_RADIOTAP_VHT_KNOWN_GI) &&
+			    (iterator.this_arg[2] &
+			     IEEE80211_RADIOTAP_VHT_FLAG_SGI))
+				rate_flags |= IEEE80211_TX_RC_SHORT_GI;
+			if (vht_known &
+			    IEEE80211_RADIOTAP_VHT_KNOWN_BANDWIDTH) {
+				if (iterator.this_arg[3] == 1)
+					rate_flags |=
+						IEEE80211_TX_RC_40_MHZ_WIDTH;
+				else if (iterator.this_arg[3] == 4)
+					rate_flags |=
+						IEEE80211_TX_RC_80_MHZ_WIDTH;
+				else if (iterator.this_arg[3] == 11)
+					rate_flags |=
+						IEEE80211_TX_RC_160_MHZ_WIDTH;
+			}
+
+			vht_mcs = iterator.this_arg[4] >> 4;
+			if (vht_mcs > 11)
+				vht_mcs = 0;
+			vht_nss = iterator.this_arg[4] & 0xF;
+			if (!vht_nss || vht_nss > 8)
+				vht_nss = 1;
+			break;
+
+		/*
+		 * Please update the file
+		 * Documentation/networking/mac80211-injection.rst
+		 * when parsing new fields here.
+		 */
+
+		default:
+			break;
+		}
+	}
+
+	if (ret != -ENOENT) /* ie, if we didn't simply run out of fields */
+		return false;
+
+	if (rate_found) {
+		struct ieee80211_supported_band *sband = NULL;
+
+		if (hdd_ctx && hdd_ctx->wiphy)
+			sband = hdd_ctx->wiphy->bands[info->band];
+
+		for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
+			info->control.rates[i].idx = -1;
+			info->control.rates[i].flags = 0;
+			info->control.rates[i].count = 0;
+		}
+
+		if (rate_flags & IEEE80211_TX_RC_MCS) {
+			info->control.rates[0].idx = rate;
+		} else if (rate_flags & IEEE80211_TX_RC_VHT_MCS) {
+			ieee80211_rate_set_vht(info->control.rates, vht_mcs,
+					       vht_nss);
+		} else if (sband) {
+			for (i = 0; i < sband->n_bitrates; i++) {
+				if (rate * 5 != sband->bitrates[i].bitrate)
+					continue;
+
+				info->control.rates[0].idx = i;
+				break;
+			}
+		}
+
+		if (info->control.rates[0].idx < 0)
+			info->control.flags &= ~IEEE80211_TX_CTRL_RATE_INJECT;
+
+		info->control.rates[0].flags = rate_flags;
+		info->control.rates[0].count = min_t(u8, rate_retries + 1, 7);
+	}
+
+	return true;
+}
+
+#define MAC_ADDRESS_STR "%02x:%02x:%02x:%02x:%02x:%02x"
+#define MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+
 /**
  * __hdd_hard_start_xmit() - Transmit a frame
  * @skb: pointer to OS packet (sk_buff)
@@ -516,8 +744,88 @@ static void __hdd_hard_start_xmit(struct sk_buff *skb,
 	enum sme_qos_wmmuptype up;
 	QDF_STATUS status;
 
-	if (hdd_drop_tx_packet_on_ftm(skb))
+	if (hdd_drop_tx_packet_on_ftm(skb)) {
 		return;
+	}
+
+	/* Check if device is in monitor mode for frame injection */
+	if (hdd_get_conparam() == QDF_GLOBAL_MONITOR_MODE) {
+		struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+		u16 len_rthdr = 0;
+		unsigned char *data;
+
+		memset(info, 0, sizeof(*info));
+		info->flags = IEEE80211_TX_CTL_REQ_TX_STATUS |
+		      	  IEEE80211_TX_CTL_INJECTED;
+
+		/* Sanity-check the length of the radiotap header */
+		if (!ieee80211_validate_radiotap_len(skb)) {
+			hdd_err("radiotap header length invalid");
+			kfree_skb(skb);
+			return;
+		}
+
+		/* we now know there is a radiotap header with a length we can use */
+		len_rthdr = ieee80211_get_radiotap_len(skb->data);
+
+		/*
+		 * fix up the pointers accounting for the radiotap
+		 * header still being in there.  We are being given
+		 * a precooked IEEE80211 header so no need for
+		 * normal processing
+		 */
+		skb_set_mac_header(skb, len_rthdr);
+		/*
+		 * these are just fixed to the end of the rt area since we
+		 * don't have any better information and at this point, nobody cares
+		 */
+		skb_set_network_header(skb, len_rthdr);
+		skb_set_transport_header(skb, len_rthdr);
+
+		/* Handle radiotap header for monitor mode: parse and apply all settings from the radiotap header */
+		if (!ieee80211_parse_tx_radiotap(skb, dev)) {
+			hdd_err("parse radiotap header failed");
+			kfree_skb(skb);
+			return;
+		}
+
+		/* remove the injection radiotap header */
+		qdf_nbuf_pull_head(skb, len_rthdr);
+
+		data = qdf_nbuf_data((qdf_nbuf_t)skb);
+		if (qdf_nbuf_len((qdf_nbuf_t)skb) >= sizeof(struct ieee80211_hdr)) {
+			struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)data;
+			uint16_t frame_control = le16_to_cpu(hdr->frame_control);
+			uint16_t frame_type = (frame_control & IEEE80211_FCTL_FTYPE) >> 2;
+			uint16_t frame_subtype = (frame_control & IEEE80211_FCTL_STYPE) >> 4;
+			uint16_t seq_ctrl = le16_to_cpu(hdr->seq_ctrl);
+			uint16_t fragment_number = seq_ctrl & 0x000F;
+			uint16_t sequence_number = (seq_ctrl & 0xFFF0) >> 4;
+			unsigned char *addr1 = hdr->addr1;
+			unsigned char *addr2 = hdr->addr2;
+			unsigned char *addr3 = hdr->addr3;
+			
+			pr_info("%s: nbuf_len=%zu frame_type=%d frame_subtype=%d addr1=" MAC_ADDRESS_STR " addr2=" MAC_ADDRESS_STR " addr3=" MAC_ADDRESS_STR " frag_num=%u seq_num=%u\n",
+				__func__, qdf_nbuf_len((qdf_nbuf_t)skb), frame_type, frame_subtype,
+				MAC_ADDR_ARRAY(addr1),
+				MAC_ADDR_ARRAY(addr2),
+				MAC_ADDR_ARRAY(addr3),
+				fragment_number, sequence_number);
+		}
+
+		/* For monitor mode, directly send the frame without QoS handling */
+		status = ucfg_dp_start_xmit((qdf_nbuf_t)skb, adapter->deflink->vdev);
+		hdd_info("Monitor mode: sending raw pack %s",
+			  QDF_STATUS_E_FAILURE == status ? "FAIL" : "SUCCESS");
+		if (QDF_IS_STATUS_SUCCESS(status)) {
+			netif_trans_update(dev);
+			wlan_hdd_sar_unsolicited_timer_start(adapter->hdd_ctx);
+		} else {
+			++stats->per_cpu[cpu].tx_dropped_ac[0]; /* Use AC 0 for counting */
+			hdd_err("Monitor mode: Failed to send raw packet, status %d", status);
+		}
+		return;
+	}
 
 	osif_dp_mark_pkt_type(skb);
 	hdd_tx_latency_record_ingress_ts(adapter, skb);

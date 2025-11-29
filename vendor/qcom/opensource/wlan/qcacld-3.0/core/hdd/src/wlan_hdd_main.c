@@ -7310,7 +7310,9 @@ static const struct net_device_ops wlan_drv_ops = {
 static const struct net_device_ops wlan_mon_drv_ops = {
 	.ndo_open = hdd_mon_open,
 	.ndo_stop = hdd_stop,
+	.ndo_start_xmit = hdd_hard_start_xmit,
 	.ndo_get_stats = hdd_get_stats,
+	.ndo_set_mac_address = hdd_set_mac_address,
 };
 
 /**
@@ -9659,6 +9661,8 @@ static void hdd_adapter_init_link_info(struct hdd_adapter *adapter)
 	}
 }
 
+static void hdd_v2_flow_pool_map(int vdev_id);
+
 /**
  * hdd_open_adapter() - open and setup the hdd adapter
  * @hdd_ctx: global hdd context
@@ -9777,6 +9781,12 @@ struct hdd_adapter *hdd_open_adapter(struct hdd_context *hdd_ctx,
 		INIT_WORK(&adapter->ipv4_notifier_work,
 			  hdd_ipv4_notifier_work_queue);
 
+		
+		/* For monitor mode, initialize flow pool immediately for frame injection */
+		if (QDF_MONITOR_MODE == session_type) {
+			hdd_v2_flow_pool_map(adapter->deflink->vdev_id);
+		}
+
 #ifdef WLAN_NS_OFFLOAD
 		/*
 		 * Workqueue which gets scheduled in IPv6
@@ -9792,13 +9802,17 @@ struct hdd_adapter *hdd_open_adapter(struct hdd_context *hdd_ctx,
 							params);
 			if (QDF_STATUS_SUCCESS != status)
 				goto err_destroy_dp_intf;
-			/* Stop the Interface TX queue. */
-			hdd_debug("vdev %d Disabling queues",
-				  adapter->deflink->vdev_id);
-			wlan_hdd_netif_queue_control(adapter,
-					WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
-					WLAN_CONTROL_PATH);
+			/* do not disable tx in monitor mode */
+        	if (QDF_MONITOR_MODE != session_type) {
+				/* Stop the Interface TX queue. */
+				hdd_debug("vdev %d Disabling queues",
+					  adapter->deflink->vdev_id);
+				wlan_hdd_netif_queue_control(adapter,
+						WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
+						WLAN_CONTROL_PATH);
+			}
 		}
+
 		break;
 	case QDF_P2P_GO_MODE:
 	case QDF_SAP_MODE:
@@ -10705,6 +10719,8 @@ static void hdd_flush_scan_block_work(struct hdd_adapter *adapter)
 	cds_flush_work(work);
 }
 
+static void hdd_v2_flow_pool_unmap(int vdev_id);
+
 QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 				struct hdd_adapter *adapter)
 {
@@ -10741,6 +10757,7 @@ QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 		hdd_stop_station_adapter(adapter);
 		break;
 	case QDF_MONITOR_MODE:
+		hdd_v2_flow_pool_unmap(link_info->vdev_id);
 		status = hdd_stop_mon_adapter(adapter);
 		if (QDF_IS_STATUS_ERROR(status))
 			return status;
@@ -17903,15 +17920,17 @@ static void hdd_v2_flow_pool_map(int vdev_id)
 
 	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(hdd_ctx->psoc, vdev_id,
 						    WLAN_OSIF_ID);
-	if (!vdev) {
-		hdd_err("Invalid VDEV %d", vdev_id);
-		return;
-	}
+	if (cds_get_conparam() != QDF_GLOBAL_MONITOR_MODE) {
+		if (!vdev) {
+			hdd_err("Invalid VDEV %d", vdev_id);
+			return;
+		}
 
-	if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev) ||
-	    policy_mgr_is_set_link_in_progress(wlan_vdev_get_psoc(vdev))) {
-		hdd_info_rl("Link switch/set_link is ongoing, do not invoke flow pool map");
-		goto release_ref;
+		if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev) ||
+	    	policy_mgr_is_set_link_in_progress(wlan_vdev_get_psoc(vdev))) {
+			hdd_info_rl("Link switch/set_link is ongoing, do not invoke flow pool map");
+			goto release_ref;
+		}
 	}
 
 	status = cdp_flow_pool_map(cds_get_context(QDF_MODULE_ID_SOC),

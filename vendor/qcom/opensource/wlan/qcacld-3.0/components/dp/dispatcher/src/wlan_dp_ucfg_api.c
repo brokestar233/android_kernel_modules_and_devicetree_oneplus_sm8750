@@ -1432,9 +1432,14 @@ QDF_STATUS ucfg_dp_mon_register_txrx_ops(struct wlan_objmgr_vdev *vdev)
 	qdf_mem_zero(&txrx_ops, sizeof(txrx_ops));
 	txrx_ops.rx.rx = dp_mon_rx_packet_cbk;
 	dp_monitor_set_rx_monitor_cb(&txrx_ops, dp_rx_monitor_callback);
+	
 	txrx_ops.vdev_del_notify = wlan_dp_link_cdp_vdev_delete_notification;
 	cdp_vdev = cdp_vdev_register(soc, dp_link->link_id,
 				     (ol_osif_vdev_handle)dp_link, &txrx_ops);
+	if (!txrx_ops.tx.tx) {
+		dp_err("vdev register fail");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	wlan_dp_add_cdp_vdev(dp_link, cdp_vdev);
 	dp_intf->txrx_ops = txrx_ops;

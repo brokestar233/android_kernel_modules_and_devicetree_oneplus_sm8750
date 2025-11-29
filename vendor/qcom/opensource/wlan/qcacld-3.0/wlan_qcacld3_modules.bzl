@@ -19,10 +19,10 @@ _target_chipset_map = {
     ],
     "sun": [
         "peach-v2",
-        "peach",
-        "kiwi-v2",
-        "qca6750",
-        "wcn7750",
+#        "peach",
+#        "kiwi-v2",
+#        "qca6750",
+#        "wcn7750",
     ],
     "volcano": [
         "qca6750",

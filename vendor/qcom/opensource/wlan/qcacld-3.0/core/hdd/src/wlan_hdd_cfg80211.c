@@ -31357,6 +31357,15 @@ static int __wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
+	mon_ctx = WLAN_HDD_GET_MONITOR_CTX_PTR(adapter->deflink);
+	/* Check if target channel is same as current channel */
+	if (mon_ctx->freq == chandef->chan->center_freq &&
+	    mon_ctx->bandwidth == ch_width) {
+		hdd_info("Target channel and mode is same as current channel and mode channel freq %d and mode %d",
+			  mon_ctx->freq, mon_ctx->bandwidth);
+		return 0;
+	}
+
 	max_fw_bw = sme_get_vht_ch_width();
 
 	if ((ch_width == CH_WIDTH_160MHZ &&
@@ -31367,8 +31376,6 @@ static int __wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
 			ch_width, max_fw_bw);
 		return -EINVAL;
 	}
-
-	mon_ctx = WLAN_HDD_GET_MONITOR_CTX_PTR(adapter->deflink);
 
 	if (WLAN_REG_IS_24GHZ_CH_FREQ(chandef->chan->center_freq) &&
 	    chandef->width == NL80211_CHAN_WIDTH_40 &&
@@ -32880,6 +32887,7 @@ static int __wlan_hdd_cfg80211_get_channel(struct wiphy *wiphy,
 	struct net_device *dev = wdev->netdev;
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
 	struct hdd_context *hdd_ctx;
+	struct hdd_monitor_ctx *mon_ctx;
 	int ret = 0;
 
 	if (hdd_validate_adapter(adapter))
@@ -32905,6 +32913,18 @@ static int __wlan_hdd_cfg80211_get_channel(struct wiphy *wiphy,
 		ret = wlan_hdd_cfg80211_get_channel_sta(wiphy, chandef, hdd_ctx,
 							adapter, link_id);
 		break;
+	case QDF_MONITOR_MODE:
+		mon_ctx = WLAN_HDD_GET_MONITOR_CTX_PTR(adapter->deflink);
+		chandef->chan = ieee80211_get_channel(wiphy, mon_ctx->freq);
+		if (!chandef->chan) {
+			hdd_err("Failed to get channel for frequency %d MHz", mon_ctx->freq);
+			return -EINVAL;
+		}
+		chandef->center_freq1 = mon_ctx->freq;
+		chandef->width = hdd_phy_chwidth_to_nl80211_chwidth(mon_ctx->bandwidth);
+		chandef->center_freq2 = 0;
+		break;
+
 	default:
 		return -EINVAL;
 	}

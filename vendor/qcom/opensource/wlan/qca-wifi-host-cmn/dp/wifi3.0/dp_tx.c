@@ -1439,16 +1439,24 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
 
-	if (dp_tx_limit_check(vdev, nbuf))
+	pr_info("%s: start vdev_id=%u mode=%d\n", __func__, vdev->vdev_id, vdev->opmode);
+
+	if (dp_tx_limit_check(vdev, nbuf)) {
+		pr_info("%s: tx limit check failed\n", __func__);
 		return NULL;
+	}
 
 	/* Allocate software Tx descriptor */
-	if (nbuf->protocol == QDF_NBUF_TRAC_EAPOL_ETH_TYPE)
+	if (nbuf->protocol == QDF_NBUF_TRAC_EAPOL_ETH_TYPE) {
+		pr_info("%s: EAPOL packet, using special descriptor\n", __func__);
 		tx_desc = dp_tx_spcl_desc_alloc(soc, desc_pool_id);
-	else
+	} else {
+		pr_info("%s: normal packet, using normal descriptor\n", __func__);
 		tx_desc = dp_tx_desc_alloc(soc, desc_pool_id);
+	}
 
 	if (!tx_desc) {
+		pr_info("%s: Tx descriptor allocation failed\n", __func__);
 		DP_STATS_INC(vdev,
 			     tx_i[msdu_info->xmit_type].dropped.desc_na.num, 1);
 		return NULL;
@@ -1473,6 +1481,7 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 	/* Allocate and prepare an extension descriptor for scattered frames */
 	msdu_ext_desc = dp_tx_prepare_ext_desc(vdev, msdu_info, desc_pool_id);
 	if (!msdu_ext_desc) {
+		pr_info("%s: Tx Extension Descriptor Alloc Fail\n", __func__);
 		dp_tx_info("Tx Extension Descriptor Alloc Fail");
 		goto failure;
 	}
@@ -1485,6 +1494,7 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 		/* Temporary WAR due to TQM VP issues */
 		tx_desc->flags |= DP_TX_DESC_FLAG_TO_FW;
 		qdf_atomic_inc(&soc->num_tx_exception);
+		pr_info("%s: Exception frame detected\n", __func__);
 	}
 
 
@@ -1496,13 +1506,18 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 
 	tx_desc->dma_addr = msdu_ext_desc->paddr;
 
-	if (msdu_ext_desc->flags & DP_TX_EXT_DESC_FLAG_METADATA_VALID)
+	if (msdu_ext_desc->flags & DP_TX_EXT_DESC_FLAG_METADATA_VALID) {
 		tx_desc->length = HAL_TX_EXT_DESC_WITH_META_DATA;
-	else
+		pr_info("%s: metadata valid, length=%u\n", __func__, tx_desc->length);
+	} else {
 		tx_desc->length = HAL_TX_EXTENSION_DESC_LEN_BYTES;
+		pr_info("%s: metadata invalid, length=%u\n", __func__, tx_desc->length);
+	}
 
+	pr_info("%s: completed successfully\n", __func__);
 	return tx_desc;
 failure:
+	pr_info("%s: failed, releasing descriptor\n", __func__);
 	dp_tx_desc_release(soc, tx_desc, desc_pool_id);
 	return NULL;
 }
@@ -1529,17 +1544,23 @@ static qdf_nbuf_t dp_tx_prepare_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	struct dp_tx_sg_info_s *sg_info = &msdu_info->u.sg_info;
 	qdf_dot3_qosframe_t *qos_wh = (qdf_dot3_qosframe_t *) nbuf->data;
 
+	pr_info("%s: Enter, nbuf=%pK, vdev=%pK\n", __func__, nbuf, vdev);
 	DP_STATS_INC_PKT(vdev, tx_i[msdu_info->xmit_type].raw.raw_pkt,
 			 1, qdf_nbuf_len(nbuf));
 
 	/* Continue only if frames are of DATA type */
-	if (!DP_FRAME_IS_DATA(qos_wh)) {
+	pr_info("%s: Checking if frame is DATA type\n", __func__);
+	/* Allow all frame types in monitoring mode */
+	if (vdev->opmode != wlan_op_mode_monitor && !DP_FRAME_IS_DATA(qos_wh)) {
+		pr_info("%s: Frame is NOT DATA type, dropping packet\n", __func__);
 		DP_STATS_INC(vdev,
 			     tx_i[msdu_info->xmit_type].raw.invalid_raw_pkt_datatype,
 			     1);
 		dp_tx_debug("Pkt. recd is of not data type");
 		goto error;
 	}
+	pr_info("%s: Frame is DATA type or in monitor mode, continuing\n", __func__);
+	
 	/* SWAR for HW: Enable WEP bit in the AMSDU frames for RAW mode */
 	if (vdev->raw_mode_war &&
 	    (qos_wh->i_fc[0] & QDF_IEEE80211_FC0_SUBTYPE_QOS) &&
@@ -1548,11 +1569,13 @@ static qdf_nbuf_t dp_tx_prepare_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 	for (curr_nbuf = nbuf, i = 0; curr_nbuf;
 			curr_nbuf = qdf_nbuf_next(curr_nbuf), i++) {
+		pr_info("%s: Processing frag %d, curr_nbuf=%pK\n", __func__, i, curr_nbuf);
 		/*
 		 * Number of nbuf's must not exceed the size of the frags
 		 * array in seg_info.
 		 */
 		if (i >= DP_TX_MAX_NUM_FRAGS) {
+			pr_info("%s: Fragment count exceeds max limit\n", __func__);
 			dp_err_rl("nbuf cnt exceeds the max number of segs");
 			DP_STATS_INC(vdev,
 				     tx_i[msdu_info->xmit_type].raw.num_frags_overflow_err,
@@ -1564,6 +1587,7 @@ static qdf_nbuf_t dp_tx_prepare_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 						   curr_nbuf,
 						   QDF_DMA_TO_DEVICE,
 						   curr_nbuf->len)) {
+			pr_info("%s: DMA mapping error\n", __func__);
 			dp_tx_err("%s dma map error ", __func__);
 			DP_STATS_INC(vdev,
 				     tx_i[msdu_info->xmit_type].raw.dma_map_error,
@@ -1588,10 +1612,13 @@ static qdf_nbuf_t dp_tx_prepare_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 	msdu_info->frm_type = dp_tx_frm_raw;
 	msdu_info->num_seg = 1;
+	
+	pr_info("%s: Successfully prepared raw packet, returning nbuf\n", __func__);
 
 	return nbuf;
 
 error:
+	pr_info("%s: Error occurred, cleaning up buffers\n", __func__);
 	i = 0;
 	while (nbuf) {
 		curr_nbuf = nbuf;
@@ -1604,6 +1631,7 @@ error:
 		nbuf = qdf_nbuf_next(nbuf);
 		qdf_nbuf_free(curr_nbuf);
 	}
+	pr_info("%s: Exit with error, returning NULL\n", __func__);
 	return NULL;
 
 }
@@ -3350,6 +3378,8 @@ qdf_nbuf_t dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc,
 	qdf_nbuf_t nbuf = desc->nbuf;
 	enum dp_tx_event_type type = dp_tx_get_event_type(desc->flags);
 
+	pr_info("%s: was been called", __func__);
+
 	/* nbuf already freed in vdev detach path */
 	if (!nbuf)
 		return NULL;
@@ -3465,6 +3495,9 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	uint8_t prep_desc_fail = 0, hw_enq_fail = 0;
 
+	pr_info("%s: Enter, vdev_id=%d, frm_type=%d, num_seg=%d\n",
+		__func__, vdev->vdev_id, msdu_info->frm_type, msdu_info->num_seg);
+
 	if (msdu_info->frm_type == dp_tx_frm_me)
 		nbuf = msdu_info->u.sg_info.curr_seg->nbuf;
 
@@ -3475,6 +3508,8 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	 * descriptors using information in msdu_info
 	 */
 	while (i < msdu_info->num_seg) {
+		pr_info("%s: Processing segment %d/%d\n", __func__,
+			i+1, msdu_info->num_seg);
 		/*
 		 * Setup Tx descriptor for an MSDU, and MSDU extension
 		 * descriptor
@@ -3483,8 +3518,10 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				tx_q->desc_pool_id);
 
 		if (!tx_desc) {
+			pr_info("%s: tx_desc preparation failed for segment %d\n", __func__, i+1);
 			if (msdu_info->frm_type == dp_tx_frm_me) {
 				prep_desc_fail++;
+				pr_info("%s: ME frame desc prep failed, count=%d\n", __func__, prep_desc_fail);
 				dp_tx_me_free_buf(pdev,
 					(void *)(msdu_info->u.sg_info
 						.curr_seg->frags[0].vaddr));
@@ -3493,6 +3530,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 					 * Unmap is needed only if descriptor
 					 * preparation failed for all segments.
 					 */
+					pr_info("%s: All segments failed, unmapping nbuf\n", __func__);
 					qdf_nbuf_unmap(soc->osdev,
 						       msdu_info->u.sg_info.
 						       curr_seg->nbuf,
@@ -3518,6 +3556,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			}
 
 			if (msdu_info->frm_type == dp_tx_frm_tso) {
+				pr_info("%s: TSO frame desc prep failed\n", __func__);
 				dp_tx_tso_seg_history_add(
 						soc,
 						msdu_info->u.tso_info.curr_seg,
@@ -3536,11 +3575,16 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				}
 			}
 
-			if (msdu_info->frm_type == dp_tx_frm_sg)
+			if (msdu_info->frm_type == dp_tx_frm_sg) {
+				pr_info("%s: SG frame desc prep failed, unmapping buf\n", __func__);
 				dp_tx_sg_unmap_buf(soc, nbuf, msdu_info);
+			}
 
+			pr_info("%s: Desc prep failed, goto done\n", __func__);
 			goto done;
 		}
+
+		pr_info("%s: Desc prepared successfully for segment %d\n", __func__, i+1);
 
 		if (msdu_info->frm_type == dp_tx_frm_me) {
 			tx_desc->msdu_ext_desc->me_buffer =
@@ -3590,15 +3634,22 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		/*
 		 * Enqueue the Tx MSDU descriptor to HW for transmit
 		 */
+		pr_info("%s: Calling TX function %pS\n", __func__, soc->arch_ops.tx_hw_enqueue);
 		status = soc->arch_ops.tx_hw_enqueue(soc, vdev, tx_desc,
 						     htt_tcl_metadata,
 						     NULL, msdu_info);
+
+		pr_info("%s: tx_hw_enqueue returned %d for segment %d\n", __func__,
+			status, i+1);
 
 		dp_tx_check_and_flush_hp(soc, status, msdu_info);
 
 		if (status != QDF_STATUS_SUCCESS) {
 			dp_info_rl("Tx_hw_enqueue Fail tx_desc %pK queue %d",
 				   tx_desc, tx_q->ring_id);
+
+			pr_info("%s: tx_hw_enqueue FAILED for segment %d, status=%d\n", __func__,
+				i+1, status);
 
 			dp_tx_get_tid(vdev, nbuf, msdu_info);
 			tid_stats = &pdev->stats.tid_stats.
@@ -3607,11 +3658,13 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 			if (msdu_info->frm_type == dp_tx_frm_me) {
 				hw_enq_fail++;
+				pr_info("%s: ME frame hw enqueue failed, count=%d\n", __func__, hw_enq_fail);
 				if (hw_enq_fail == msdu_info->num_seg) {
 					/*
 					 * Unmap is needed only if enqueue
 					 * failed for all segments.
 					 */
+					pr_info("%s: All segments hw enqueue failed, unmapping nbuf\n", __func__);
 					qdf_nbuf_unmap(soc->osdev,
 						       msdu_info->u.sg_info.
 						       curr_seg->nbuf,
@@ -3650,6 +3703,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				 * unmap and free current,
 				 * retransmit remaining segments
 				 */
+				pr_info("%s: TSO frame hw enqueue failed, freeing buffer\n", __func__);
 				dp_tx_comp_free_buf(soc, tx_desc, false);
 				i++;
 				dp_tx_desc_release(soc, tx_desc,
@@ -3657,12 +3711,17 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				continue;
 			}
 
-			if (msdu_info->frm_type == dp_tx_frm_sg)
+			if (msdu_info->frm_type == dp_tx_frm_sg) {
+				pr_info("%s: SG frame hw enqueue failed, unmapping buf\n", __func__);
 				dp_tx_sg_unmap_buf(soc, nbuf, msdu_info);
+			}
 
+			pr_info("%s: Releasing tx desc due to hw enqueue failure\n", __func__);
 			dp_tx_desc_release(soc, tx_desc, tx_q->desc_pool_id);
 			goto done;
 		}
+
+		pr_info("%s: Segment %d enqueued successfully\n", __func__, i+1);
 
 		dp_tx_update_ts_on_enqueued(vdev, msdu_info, tx_desc);
 
@@ -3684,15 +3743,20 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				msdu_info->u.sg_info.curr_seg =
 					msdu_info->u.sg_info.curr_seg->next;
 				nbuf = msdu_info->u.sg_info.curr_seg->nbuf;
-			} else
+				pr_info("%s: Moving to next segment\n", __func__);
+			} else {
+				pr_info("%s: No more segments\n", __func__);
 				break;
+			}
 		}
 		i++;
 	}
 
 	nbuf = NULL;
+	pr_info("%s: All segments processed successfully\n", __func__);
 
 done:
+	pr_info("%s: Exit, returning nbuf=%pK\n", __func__, nbuf);
 	return nbuf;
 }
 
@@ -4518,9 +4582,15 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_vdev *vdev = NULL;
 	qdf_nbuf_t end_nbuf = NULL;
 	uint8_t xmit_type;
+	unsigned char *data;
 
-	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT))
+	#define MAC_ADDRESS_STR "%02x:%02x:%02x:%02x:%02x:%02x"
+	#define MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+
+	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT)) {
+		pr_info("%s: Invalid vdev_id %u\n", __func__, vdev_id);
 		return nbuf;
+	}
 
 	/*
 	 * dp_vdev_get_ref_by_id does does a atomic operation avoid using
@@ -4530,8 +4600,55 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 * tx lock
 	 */
 	vdev = soc->vdev_id_map[vdev_id];
-	if (qdf_unlikely(!vdev))
+	if (qdf_unlikely(!vdev)) {
+		pr_info("%s: VDEV not found for id %u\n", __func__, vdev_id);
 		return nbuf;
+	}
+
+	data = qdf_nbuf_data(nbuf);
+	if (qdf_nbuf_len(nbuf) >= sizeof(struct ieee80211_hdr)) {
+		struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)data;
+		uint16_t frame_control = le16_to_cpu(hdr->frame_control);
+		uint16_t frame_type = (frame_control & IEEE80211_FCTL_FTYPE) >> 2;
+		uint16_t frame_subtype = (frame_control & IEEE80211_FCTL_STYPE) >> 4;
+		uint16_t seq_ctrl = le16_to_cpu(hdr->seq_ctrl);
+		uint16_t fragment_number = seq_ctrl & 0x000F;
+		uint16_t sequence_number = (seq_ctrl & 0xFFF0) >> 4;
+		unsigned char *addr1 = hdr->addr1;
+		unsigned char *addr2 = hdr->addr2;
+		unsigned char *addr3 = hdr->addr3;
+			
+		pr_info("%s: nbuf_len=%zu frame_type=%d frame_subtype=%d addr1=" MAC_ADDRESS_STR " addr2=" MAC_ADDRESS_STR " addr3=" MAC_ADDRESS_STR " frag_num=%u seq_num=%u\n",
+			__func__, qdf_nbuf_len(nbuf), frame_type, frame_subtype,
+			MAC_ADDR_ARRAY(addr1),
+			MAC_ADDR_ARRAY(addr2),
+			MAC_ADDR_ARRAY(addr3),
+			fragment_number, sequence_number);
+	}
+
+	if (qdf_unlikely(wlan_op_mode_monitor == vdev->opmode)) {
+        struct dp_tx_seg_info_s seg_info = {0};
+
+        pr_info("%s: Processing Monitor Mode RAW frame\n", __func__);
+
+        msdu_info.tid = HTT_TX_EXT_TID_INVALID;
+        xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
+        msdu_info.xmit_type = xmit_type;
+        DP_STATS_INC_PKT(vdev, tx_i[xmit_type].rcvd, 1, qdf_nbuf_len(nbuf));
+
+        dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
+
+        nbuf = dp_tx_prepare_raw(vdev, nbuf, &seg_info, &msdu_info);
+
+        if (!nbuf) {
+            pr_info("%s: Monitor Mode Raw preparation failed\n", __func__);
+            return NULL;
+        }
+
+        pr_info("%s: Monitor Mode frame prepared, going to send_multiple\n", __func__);
+        goto send_multiple;
+    }
+
 	/*
 	 * Get HW Queue to use for this frame.
 	 * TCL supports upto 4 DMA rings, out of which 3 rings are
@@ -4541,6 +4658,8 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 *  to minimize lock contention for these resources.
 	 */
 	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
+	pr_info("%s: Got desc_pool_id=%u, ring_id=%u\n", __func__,
+		msdu_info.tx_queue.desc_pool_id, msdu_info.tx_queue.ring_id);
 
 	dp_tx_override_flow_pool_id(soc, vdev, &msdu_info);
 
@@ -4560,15 +4679,18 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
 	msdu_info.xmit_type = xmit_type;
 	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].rcvd, 1, qdf_nbuf_len(nbuf));
+	pr_info("%s: xmit_type=%u\n", __func__, xmit_type);
 
 	if (qdf_unlikely(vdev->mesh_vdev)) {
 		qdf_nbuf_t nbuf_mesh = dp_tx_extract_mesh_meta_data(vdev, nbuf,
 								&msdu_info);
 		if (!nbuf_mesh) {
 			dp_verbose_debug("Extracting mesh metadata failed");
+			pr_info("%s: Extracting mesh metadata failed\n", __func__);
 			return nbuf;
 		}
 		nbuf = nbuf_mesh;
+		pr_info("%s: Mesh metadata extracted\n", __func__);
 	}
 
 
@@ -4587,6 +4709,7 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 * to fill in TCL Input descriptor (per-packet TID override).
 	 */
 	dp_tx_classify_tid(vdev, nbuf, &msdu_info);
+	pr_info("%s: Classified TID=%u\n", __func__, msdu_info.tid);
 
 	/*
 	 * Classify the frame and call corresponding
@@ -4597,38 +4720,49 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 */
 	if (qdf_nbuf_is_tso(nbuf)) {
 		dp_verbose_debug("TSO frame %pK", vdev);
+		pr_info("%s: Processing TSO frame\n", __func__);
 		DP_STATS_INC_PKT(vdev->pdev, tso_stats.num_tso_pkts, 1,
 				 qdf_nbuf_len(nbuf));
 
 		if (dp_tx_prepare_tso(vdev, nbuf, &msdu_info)) {
 			DP_STATS_INC_PKT(vdev->pdev, tso_stats.dropped_host, 1,
 					 qdf_nbuf_len(nbuf));
+			pr_info("%s: TSO preparation failed\n", __func__);
 			return nbuf;
 		}
 
 		DP_STATS_INC(vdev, tx_i[xmit_type].rcvd.num,
 			     msdu_info.num_seg - 1);
 
+		pr_info("%s: TSO prepared, num_seg=%u, going to send_multiple\n",
+			__func__, msdu_info.num_seg);
 		goto send_multiple;
 	}
 
 	/* SG */
 	if (qdf_unlikely(qdf_nbuf_is_nonlinear(nbuf))) {
+		pr_info("%s: Non-linear buffer detected\n", __func__);
 		if (qdf_nbuf_get_nr_frags(nbuf) > DP_TX_MAX_NUM_FRAGS - 1) {
+			pr_info("%s: Too many fragments, linearizing\n", __func__);
 			if (qdf_unlikely(qdf_nbuf_linearize(nbuf)))
 				return nbuf;
 		} else {
 			struct dp_tx_seg_info_s seg_info = {0};
 
-			if (qdf_unlikely(is_nbuf_frm_rmnet(nbuf, &msdu_info)))
+			if (qdf_unlikely(is_nbuf_frm_rmnet(nbuf, &msdu_info))) {
+				pr_info("%s: RMNET frame, going to send_single\n", __func__);
 				goto send_single;
+			}
 
 			nbuf = dp_tx_prepare_sg(vdev, nbuf, &seg_info,
 						&msdu_info);
-			if (!nbuf)
+			if (!nbuf) {
+				pr_info("%s: SG preparation failed\n", __func__);
 				return NULL;
+			}
 
 			dp_verbose_debug("non-TSO SG frame %pK", vdev);
+			pr_info("%s: SG prepared, going to send_multiple\n", __func__);
 
 			DP_STATS_INC_PKT(vdev, tx_i[xmit_type].sg.sg_pkt, 1,
 					 qdf_nbuf_len(nbuf));
@@ -4637,21 +4771,29 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		}
 	}
 
-	if (qdf_unlikely(!dp_tx_mcast_enhance(vdev, nbuf)))
+	if (qdf_unlikely(!dp_tx_mcast_enhance(vdev, nbuf))) {
+		pr_info("%s: Multicast enhancement failed\n", __func__);
 		return NULL;
+	}
 
-	if (qdf_unlikely(dp_tx_mcast_drop(vdev, nbuf)))
+	if (qdf_unlikely(dp_tx_mcast_drop(vdev, nbuf))) {
+		pr_info("%s: Multicast packet dropped\n", __func__);
 		return nbuf;
+	}
 
 	/* RAW */
 	if (qdf_unlikely(vdev->tx_encap_type == htt_cmn_pkt_type_raw)) {
 		struct dp_tx_seg_info_s seg_info = {0};
 
+		pr_info("%s: Processing RAW frame\n", __func__);
 		nbuf = dp_tx_prepare_raw(vdev, nbuf, &seg_info, &msdu_info);
-		if (!nbuf)
+		if (!nbuf) {
+			pr_info("%s: Raw preparation failed\n", __func__);
 			return NULL;
+		}
 
 		dp_verbose_debug("Raw frame %pK", vdev);
+		pr_info("%s: Raw frame prepared, going to send_multiple\n", __func__);
 
 		goto send_multiple;
 
@@ -4682,6 +4824,7 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		peer_id = DP_INVALID_PEER;
 		DP_STATS_INC_PKT(vdev, tx_i[xmit_type].nawds_mcast,
 				 1, qdf_nbuf_len(nbuf));
+		pr_info("%s: NAWDS handled\n", __func__);
 	}
 
 send_single:
@@ -4691,15 +4834,19 @@ send_single:
 	 * prepare direct-buffer type TCL descriptor and enqueue to TCL
 	 * SRNG. There is no need to setup a MSDU extension descriptor.
 	 */
+	pr_info("%s: Sending single MSDU\n", __func__);
 	nbuf = dp_tx_send_msdu_single_wrapper(vdev, nbuf, &msdu_info,
 					      peer_id, end_nbuf);
 	return nbuf;
 
 send_multiple:
+	pr_info("%s: Sending multiple MSDUs\n", __func__);
 	nbuf = dp_tx_send_msdu_multiple(vdev, nbuf, &msdu_info);
 
-	if (qdf_unlikely(nbuf && msdu_info.frm_type == dp_tx_frm_raw))
+	if (qdf_unlikely(nbuf && msdu_info.frm_type == dp_tx_frm_raw)) {
 		dp_tx_raw_prepare_unset(vdev->pdev->soc, nbuf);
+		pr_info("%s: Raw prepare unset\n", __func__);
+	}
 
 	return nbuf;
 }
