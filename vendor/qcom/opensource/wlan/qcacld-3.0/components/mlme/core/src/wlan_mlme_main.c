@@ -1356,8 +1356,8 @@ static void mlme_init_generic_cfg(struct wlan_objmgr_psoc *psoc,
 		cfg_get(psoc, CFG_ENABLE_RTT_MAC_RANDOMIZATION);
 	gen->band_capability =
 		cfg_get(psoc, CFG_BAND_CAPABILITY);
-	if (!gen->band_capability)
-		gen->band_capability = REG_BAND_MASK_ALL;
+	/* Force band capability to support all bands (2.4GHz, 5GHz, and 6GHz) */
+	gen->band_capability = REG_BAND_MASK_ALL;
 	gen->band = gen->band_capability;
 	gen->select_5ghz_margin =
 		cfg_get(psoc, CFG_SELECT_5GHZ_MARGIN);
@@ -1941,11 +1941,11 @@ static void mlme_init_rates_in_cfg(struct wlan_objmgr_psoc *psoc,
 static void mlme_init_dfs_cfg(struct wlan_objmgr_psoc *psoc,
 			      struct wlan_mlme_dfs_cfg *dfs_cfg)
 {
-	dfs_cfg->dfs_ignore_cac = cfg_get(psoc, CFG_IGNORE_CAC);
+	dfs_cfg->dfs_ignore_cac = 1; // Force ignore CAC - cfg_get(psoc, CFG_IGNORE_CAC);
 	dfs_cfg->dfs_master_capable =
 		cfg_get(psoc, CFG_ENABLE_DFS_MASTER_CAPABILITY);
 	dfs_cfg->dfs_disable_channel_switch =
-		cfg_get(psoc, CFG_DISABLE_DFS_CH_SWITCH);
+		1; // Force disable channel switch - cfg_get(psoc, CFG_DISABLE_DFS_CH_SWITCH);
 	dfs_cfg->dfs_filter_offload =
 		cfg_get(psoc, CFG_ENABLE_DFS_PHYERR_FILTEROFFLOAD);
 	dfs_cfg->dfs_prefer_non_dfs =

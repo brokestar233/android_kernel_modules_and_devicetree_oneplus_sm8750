@@ -307,7 +307,8 @@ QDF_STATUS wlan_mlme_set_band_capability(struct wlan_objmgr_psoc *psoc,
 	if (!mlme_obj)
 		return QDF_STATUS_E_FAILURE;
 
-	mlme_obj->cfg.gen.band_capability = band_capability;
+	/* Force band capability to support all bands (2.4GHz, 5GHz, and 6GHz) */
+	mlme_obj->cfg.gen.band_capability = REG_BAND_MASK_ALL;
 
 	return QDF_STATUS_SUCCESS;
 }

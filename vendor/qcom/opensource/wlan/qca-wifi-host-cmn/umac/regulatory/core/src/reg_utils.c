@@ -1062,6 +1062,8 @@ uint32_t reg_get_country_max_allowed_bw(struct wlan_objmgr_pdev *pdev)
 
 bool reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
 {
+	return false;
+
 	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
 
 	psoc_reg = reg_get_psoc_obj(psoc);

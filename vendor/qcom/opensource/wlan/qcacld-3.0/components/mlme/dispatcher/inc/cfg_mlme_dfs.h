@@ -154,7 +154,7 @@
  */
 #define CFG_IGNORE_CAC CFG_INI_BOOL( \
 			"gIgnoreCAC", \
-			0, \
+			1, \
 			"ignore CAC on DFS channel")
 
 /*
@@ -176,7 +176,7 @@
  */
 #define CFG_DISABLE_DFS_CH_SWITCH CFG_INI_BOOL( \
 			"gDisableDFSChSwitch", \
-			0, \
+			1, \
 			"Disable channel switch on radar")
 
 /*

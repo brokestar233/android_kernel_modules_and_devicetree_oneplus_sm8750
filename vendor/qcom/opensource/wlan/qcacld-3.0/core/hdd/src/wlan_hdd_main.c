@@ -337,7 +337,7 @@ static struct kparam_string fwpath = {
 	.maxlen = BUF_LEN,
 };
 
-char *country_code;
+char *country_code = "US";
 #ifdef FEATURE_WLAN_RESIDENT_DRIVER
 EXPORT_SYMBOL(country_code);
 #endif
@@ -7306,11 +7306,14 @@ static const struct net_device_ops wlan_drv_ops = {
 };
 
 #ifdef FEATURE_MONITOR_MODE_SUPPORT
-/* Monitor mode net_device_ops, does not Tx and most of operations. */
+/* Monitor mode net_device_ops, does not most of operations. */
+/* Disable TX, as it causes kernel panic, which I cannot fix. I choose to give up.*/
 static const struct net_device_ops wlan_mon_drv_ops = {
 	.ndo_open = hdd_mon_open,
 	.ndo_stop = hdd_stop,
+#if 0
 	.ndo_start_xmit = hdd_hard_start_xmit,
+#endif
 	.ndo_get_stats = hdd_get_stats,
 	.ndo_set_mac_address = hdd_set_mac_address,
 };
@@ -23893,7 +23896,7 @@ module_param(enable_dfs_chan_scan, int, S_IRUSR | S_IRGRP | S_IROTH);
 
 module_param(enable_11d, int, S_IRUSR | S_IRGRP | S_IROTH);
 
-module_param(country_code, charp, S_IRUSR | S_IRGRP | S_IROTH);
+module_param(country_code, charp, 0444);
 
 static int timer_multiplier_get_handler(char *buffer,
 					const struct kernel_param *kp)
