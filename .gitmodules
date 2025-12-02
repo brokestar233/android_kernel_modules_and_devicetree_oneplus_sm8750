@@ -1,0 +1,3 @@
+[submodule "vendor/oplus/kernel/charger"]
+	path = vendor/oplus/kernel/charger
+	url = git@github.com:brokestar233/oplus_changer.git
