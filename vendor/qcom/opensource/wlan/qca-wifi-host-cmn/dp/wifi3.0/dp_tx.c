@@ -4579,6 +4579,7 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_tx_msdu_info_s msdu_info = {0};
 	struct dp_vdev *vdev = NULL;
 	qdf_nbuf_t end_nbuf = NULL;
+	uint8_t xmit_type;
 
 	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT)) {
 		return nbuf;
