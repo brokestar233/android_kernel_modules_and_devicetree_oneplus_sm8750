@@ -665,9 +665,6 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 	enum dp_fl_ctrl_threshold level = DP_TH_BE_BK;
 	enum netif_reason_type reason;
 
-	pr_info("%s: desc_pool_id=%u, pool=%p, avail_desc=%u\n", 
-		__func__, desc_pool_id, pool, pool ? pool->avail_desc : 0);
-
 	if (qdf_likely(pool)) {
 		qdf_spin_lock_bh(&pool->flow_pool_lock);
 		if (qdf_likely(pool->avail_desc &&

@@ -3378,8 +3378,6 @@ qdf_nbuf_t dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc,
 	qdf_nbuf_t nbuf = desc->nbuf;
 	enum dp_tx_event_type type = dp_tx_get_event_type(desc->flags);
 
-	pr_info("%s: was been called", __func__);
-
 	/* nbuf already freed in vdev detach path */
 	if (!nbuf)
 		return NULL;
@@ -4581,14 +4579,8 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_tx_msdu_info_s msdu_info = {0};
 	struct dp_vdev *vdev = NULL;
 	qdf_nbuf_t end_nbuf = NULL;
-	uint8_t xmit_type;
-	unsigned char *data;
-
-	#define MAC_ADDRESS_STR "%02x:%02x:%02x:%02x:%02x:%02x"
-	#define MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
 
 	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT)) {
-		pr_info("%s: Invalid vdev_id %u\n", __func__, vdev_id);
 		return nbuf;
 	}
 
@@ -4601,29 +4593,7 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 */
 	vdev = soc->vdev_id_map[vdev_id];
 	if (qdf_unlikely(!vdev)) {
-		pr_info("%s: VDEV not found for id %u\n", __func__, vdev_id);
 		return nbuf;
-	}
-
-	data = qdf_nbuf_data(nbuf);
-	if (qdf_nbuf_len(nbuf) >= sizeof(struct ieee80211_hdr)) {
-		struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)data;
-		uint16_t frame_control = le16_to_cpu(hdr->frame_control);
-		uint16_t frame_type = (frame_control & IEEE80211_FCTL_FTYPE) >> 2;
-		uint16_t frame_subtype = (frame_control & IEEE80211_FCTL_STYPE) >> 4;
-		uint16_t seq_ctrl = le16_to_cpu(hdr->seq_ctrl);
-		uint16_t fragment_number = seq_ctrl & 0x000F;
-		uint16_t sequence_number = (seq_ctrl & 0xFFF0) >> 4;
-		unsigned char *addr1 = hdr->addr1;
-		unsigned char *addr2 = hdr->addr2;
-		unsigned char *addr3 = hdr->addr3;
-			
-		pr_info("%s: nbuf_len=%zu frame_type=%d frame_subtype=%d addr1=" MAC_ADDRESS_STR " addr2=" MAC_ADDRESS_STR " addr3=" MAC_ADDRESS_STR " frag_num=%u seq_num=%u\n",
-			__func__, qdf_nbuf_len(nbuf), frame_type, frame_subtype,
-			MAC_ADDR_ARRAY(addr1),
-			MAC_ADDR_ARRAY(addr2),
-			MAC_ADDR_ARRAY(addr3),
-			fragment_number, sequence_number);
 	}
 
 	if (qdf_unlikely(wlan_op_mode_monitor == vdev->opmode)) {
@@ -4658,8 +4628,6 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 *  to minimize lock contention for these resources.
 	 */
 	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
-	pr_info("%s: Got desc_pool_id=%u, ring_id=%u\n", __func__,
-		msdu_info.tx_queue.desc_pool_id, msdu_info.tx_queue.ring_id);
 
 	dp_tx_override_flow_pool_id(soc, vdev, &msdu_info);
 
@@ -4679,18 +4647,15 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
 	msdu_info.xmit_type = xmit_type;
 	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].rcvd, 1, qdf_nbuf_len(nbuf));
-	pr_info("%s: xmit_type=%u\n", __func__, xmit_type);
 
 	if (qdf_unlikely(vdev->mesh_vdev)) {
 		qdf_nbuf_t nbuf_mesh = dp_tx_extract_mesh_meta_data(vdev, nbuf,
 								&msdu_info);
 		if (!nbuf_mesh) {
 			dp_verbose_debug("Extracting mesh metadata failed");
-			pr_info("%s: Extracting mesh metadata failed\n", __func__);
 			return nbuf;
 		}
 		nbuf = nbuf_mesh;
-		pr_info("%s: Mesh metadata extracted\n", __func__);
 	}
 
 
@@ -4709,7 +4674,6 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 * to fill in TCL Input descriptor (per-packet TID override).
 	 */
 	dp_tx_classify_tid(vdev, nbuf, &msdu_info);
-	pr_info("%s: Classified TID=%u\n", __func__, msdu_info.tid);
 
 	/*
 	 * Classify the frame and call corresponding
@@ -4720,49 +4684,40 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 */
 	if (qdf_nbuf_is_tso(nbuf)) {
 		dp_verbose_debug("TSO frame %pK", vdev);
-		pr_info("%s: Processing TSO frame\n", __func__);
 		DP_STATS_INC_PKT(vdev->pdev, tso_stats.num_tso_pkts, 1,
 				 qdf_nbuf_len(nbuf));
 
 		if (dp_tx_prepare_tso(vdev, nbuf, &msdu_info)) {
 			DP_STATS_INC_PKT(vdev->pdev, tso_stats.dropped_host, 1,
 					 qdf_nbuf_len(nbuf));
-			pr_info("%s: TSO preparation failed\n", __func__);
 			return nbuf;
 		}
 
 		DP_STATS_INC(vdev, tx_i[xmit_type].rcvd.num,
 			     msdu_info.num_seg - 1);
 
-		pr_info("%s: TSO prepared, num_seg=%u, going to send_multiple\n",
-			__func__, msdu_info.num_seg);
 		goto send_multiple;
 	}
 
 	/* SG */
 	if (qdf_unlikely(qdf_nbuf_is_nonlinear(nbuf))) {
-		pr_info("%s: Non-linear buffer detected\n", __func__);
 		if (qdf_nbuf_get_nr_frags(nbuf) > DP_TX_MAX_NUM_FRAGS - 1) {
-			pr_info("%s: Too many fragments, linearizing\n", __func__);
 			if (qdf_unlikely(qdf_nbuf_linearize(nbuf)))
 				return nbuf;
 		} else {
 			struct dp_tx_seg_info_s seg_info = {0};
 
 			if (qdf_unlikely(is_nbuf_frm_rmnet(nbuf, &msdu_info))) {
-				pr_info("%s: RMNET frame, going to send_single\n", __func__);
 				goto send_single;
 			}
 
 			nbuf = dp_tx_prepare_sg(vdev, nbuf, &seg_info,
 						&msdu_info);
 			if (!nbuf) {
-				pr_info("%s: SG preparation failed\n", __func__);
 				return NULL;
 			}
 
 			dp_verbose_debug("non-TSO SG frame %pK", vdev);
-			pr_info("%s: SG prepared, going to send_multiple\n", __func__);
 
 			DP_STATS_INC_PKT(vdev, tx_i[xmit_type].sg.sg_pkt, 1,
 					 qdf_nbuf_len(nbuf));
@@ -4772,12 +4727,10 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	}
 
 	if (qdf_unlikely(!dp_tx_mcast_enhance(vdev, nbuf))) {
-		pr_info("%s: Multicast enhancement failed\n", __func__);
 		return NULL;
 	}
 
 	if (qdf_unlikely(dp_tx_mcast_drop(vdev, nbuf))) {
-		pr_info("%s: Multicast packet dropped\n", __func__);
 		return nbuf;
 	}
 
@@ -4785,15 +4738,12 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (qdf_unlikely(vdev->tx_encap_type == htt_cmn_pkt_type_raw)) {
 		struct dp_tx_seg_info_s seg_info = {0};
 
-		pr_info("%s: Processing RAW frame\n", __func__);
 		nbuf = dp_tx_prepare_raw(vdev, nbuf, &seg_info, &msdu_info);
 		if (!nbuf) {
-			pr_info("%s: Raw preparation failed\n", __func__);
 			return NULL;
 		}
 
 		dp_verbose_debug("Raw frame %pK", vdev);
-		pr_info("%s: Raw frame prepared, going to send_multiple\n", __func__);
 
 		goto send_multiple;
 
@@ -4824,7 +4774,6 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		peer_id = DP_INVALID_PEER;
 		DP_STATS_INC_PKT(vdev, tx_i[xmit_type].nawds_mcast,
 				 1, qdf_nbuf_len(nbuf));
-		pr_info("%s: NAWDS handled\n", __func__);
 	}
 
 send_single:
@@ -4834,18 +4783,15 @@ send_single:
 	 * prepare direct-buffer type TCL descriptor and enqueue to TCL
 	 * SRNG. There is no need to setup a MSDU extension descriptor.
 	 */
-	pr_info("%s: Sending single MSDU\n", __func__);
 	nbuf = dp_tx_send_msdu_single_wrapper(vdev, nbuf, &msdu_info,
 					      peer_id, end_nbuf);
 	return nbuf;
 
 send_multiple:
-	pr_info("%s: Sending multiple MSDUs\n", __func__);
 	nbuf = dp_tx_send_msdu_multiple(vdev, nbuf, &msdu_info);
 
 	if (qdf_unlikely(nbuf && msdu_info.frm_type == dp_tx_frm_raw)) {
 		dp_tx_raw_prepare_unset(vdev->pdev->soc, nbuf);
-		pr_info("%s: Raw prepare unset\n", __func__);
 	}
 
 	return nbuf;

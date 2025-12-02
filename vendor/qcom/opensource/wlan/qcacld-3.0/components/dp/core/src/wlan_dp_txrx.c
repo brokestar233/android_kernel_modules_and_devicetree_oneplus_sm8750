@@ -606,33 +606,25 @@ dp_start_xmit(struct wlan_dp_link *dp_link, qdf_nbuf_t nbuf)
 	int cpu = qdf_get_smp_processor_id();
 	struct cdp_peer_output_param peer_info = {0};
 
-	pr_info("dp_start_xmit: Starting packet transmission\n");
-
 	stats = &dp_intf->dp_stats.tx_rx_stats;
 	++stats->per_cpu[cpu].tx_called;
 	stats->cont_txtimeout_cnt = 0;
 
-	pr_info("dp_start_xmit: Updated tx statistics\n");
 
 	if (qdf_unlikely(cds_is_driver_transitioning())) {
 		dp_err_rl("driver is transitioning, drop pkt");
-		pr_info("dp_start_xmit: Driver is transitioning, dropping packet\n");
 		goto drop_pkt;
 	}
 
 	if (qdf_unlikely(dp_ctx->is_suspend)) {
 		dp_err_rl("Device is system suspended, drop pkt");
-		pr_info("dp_start_xmit: Device is suspended, dropping packet\n");
 		goto drop_pkt;
 	}
 
-	pr_info("dp_start_xmit: Setting notify completion flag\n");
 	QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_NOTIFY_COMP(nbuf) = 1;
 
-	pr_info("dp_start_xmit: Getting packet type\n");
 	pkt_type = QDF_NBUF_CB_GET_PACKET_TYPE(nbuf);
 
-	pr_info("dp_start_xmit: Processing packet type %d\n", pkt_type);
 
 	/*
 	 * For Monitor mode, skip protocol specific processing,
@@ -646,100 +638,79 @@ dp_start_xmit(struct wlan_dp_link *dp_link, qdf_nbuf_t nbuf)
 				is_arp = true;
 				++dp_intf->dp_stats.arp_stats.tx_arp_req_count;
 				dp_info("ARP packet");
-				pr_info("dp_start_xmit: Processing ARP request packet\n");
 			}
 		} else if (pkt_type == QDF_NBUF_CB_PACKET_TYPE_EAPOL) {
 			subtype = qdf_nbuf_get_eapol_subtype(nbuf);
 			if (subtype == QDF_PROTO_EAPOL_M2) {
 				++dp_intf->dp_stats.eapol_stats.eapol_m2_count;
 				is_eapol = true;
-				pr_info("dp_start_xmit: Processing EAPOL M2 packet\n");
 			} else if (subtype == QDF_PROTO_EAPOL_M4) {
 				++dp_intf->dp_stats.eapol_stats.eapol_m4_count;
 				is_eapol = true;
-				pr_info("dp_start_xmit: Processing EAPOL M4 packet\n");
 			}
 		} else if (pkt_type == QDF_NBUF_CB_PACKET_TYPE_DHCP) {
 			subtype = qdf_nbuf_get_dhcp_subtype(nbuf);
 			if (subtype == QDF_PROTO_DHCP_DISCOVER) {
 				++dp_intf->dp_stats.dhcp_stats.dhcp_dis_count;
 				is_dhcp = true;
-				pr_info("dp_start_xmit: Processing DHCP discover packet\n");
 			} else if (subtype == QDF_PROTO_DHCP_REQUEST) {
 				++dp_intf->dp_stats.dhcp_stats.dhcp_req_count;
 				is_dhcp = true;
-				pr_info("dp_start_xmit: Processing DHCP request packet\n");
 			}
 		} else if ((pkt_type == QDF_NBUF_CB_PACKET_TYPE_ICMP) ||
 			   (pkt_type == QDF_NBUF_CB_PACKET_TYPE_ICMPv6)) {
 			dp_mark_icmp_req_to_fw(dp_ctx, nbuf);
-			pr_info("dp_start_xmit: Processing ICMP/ICMPv6 packet\n");
 		}
 	}
 
 	if (dp_intf->device_mode != QDF_MONITOR_MODE) {
-		pr_info("dp_start_xmit: Adding timestamp to packet\n");
 		wlan_dp_pkt_add_timestamp(dp_intf, QDF_PKT_TX_DRIVER_ENTRY, nbuf);
 	}
 
 	/* track connectivity stats */
 	if (dp_intf->pkt_type_bitmap) {
-		pr_info("dp_start_xmit: Collecting connectivity stats info\n");
 		dp_tx_rx_collect_connectivity_stats_info(nbuf, dp_link,
 							 PKT_TYPE_REQ,
 							 &pkt_type);
 	}
 
-	pr_info("dp_start_xmit: Getting transmit MAC address\n");
 	dp_get_transmit_mac_addr(dp_link, nbuf, &mac_addr_tx_allowed);
 	if (qdf_is_macaddr_zero(&mac_addr_tx_allowed)) {
 		dp_info_rl("tx not allowed, transmit operation suspended");
-		pr_info("dp_start_xmit: Transmit operation suspended, MAC address is zero\n");
 		goto drop_pkt;
 	}
 
-	pr_info("dp_start_xmit: Getting TX resources\n");
 	dp_get_tx_resource(dp_link, &mac_addr_tx_allowed);
 
-	pr_info("dp_start_xmit: Checking IPA ownership\n");
 	if (!qdf_nbuf_ipa_owned_get(nbuf)) {
-		pr_info("dp_start_xmit: Orphaning nbuf\n");
 		nbuf = dp_nbuf_orphan(dp_intf, nbuf);
 		if (!nbuf) {
-			pr_info("dp_start_xmit: Failed to orphan nbuf, dropping packet\n");
 			goto drop_pkt_accounting;
 		}
 	}
 
-	pr_info("dp_start_xmit: Acquiring skb for tracking\n");
 	/*
 	 * Add SKB to internal tracking table before further processing
 	 * in WLAN driver.
 	 */
 	qdf_net_buf_debug_acquire_skb(nbuf, __FILE__, __LINE__);
 
-	pr_info("dp_start_xmit: Updating network statistics\n");
 	qdf_net_stats_add_tx_bytes(&dp_intf->stats, qdf_nbuf_len(nbuf));
 
 	if (qdf_nbuf_is_tso(nbuf)) {
 		qdf_net_stats_add_tx_pkts(&dp_intf->stats,
 					  qdf_nbuf_get_tso_num_seg(nbuf));
-		pr_info("dp_start_xmit: TSO packet with %d segments\n", qdf_nbuf_get_tso_num_seg(nbuf));
 	} else {
 		qdf_net_stats_add_tx_pkts(&dp_intf->stats, 1);
 		dp_ctx->no_tx_offload_pkt_cnt++;
-		pr_info("dp_start_xmit: Regular packet, incrementing packet count\n");
 	}
 
-	pr_info("dp_start_xmit: Logging EAPOL packet\n");
 	dp_event_eapol_log(nbuf, QDF_TX);
 	QDF_NBUF_CB_TX_PACKET_TRACK(nbuf) = QDF_NBUF_TX_PKT_DATA_TRACK;
 	QDF_NBUF_UPDATE_TX_PKT_COUNT(nbuf, QDF_NBUF_TX_PKT_DP);
 
-	pr_info("dp_start_xmit: Setting DP trace tracking\n");
 	qdf_dp_trace_set_track(nbuf, QDF_TX);
 
-	pr_info("dp_start_xmit: Recording DP trace\n");
 	DPTRACE(qdf_dp_trace(nbuf, QDF_DP_TRACE_TX_PACKET_PTR_RECORD,
 			     QDF_TRACE_DEFAULT_PDEV_ID,
 			     qdf_nbuf_data_addr(nbuf),
@@ -752,97 +723,76 @@ dp_start_xmit(struct wlan_dp_link *dp_link, qdf_nbuf_t nbuf)
 	 * and does not require association with a specific peer.
 	 */
 	if (dp_intf->device_mode != QDF_MONITOR_MODE) {
-		pr_info("dp_start_xmit: Checking if TX is allowed\n");
 		if (!dp_intf_is_tx_allowed(nbuf, dp_link->link_id, soc,
 					   mac_addr_tx_allowed.bytes,
 					   &peer_info)) {
 			dp_info("Tx not allowed for sta:" QDF_MAC_ADDR_FMT,
 				QDF_MAC_ADDR_REF(mac_addr_tx_allowed.bytes));
-			pr_info("dp_start_xmit: TX not allowed for station\n");
 			goto drop_pkt_and_release_nbuf;
 		}
 	}
 
-	pr_info("dp_start_xmit: Checking packet type for ICMP processing\n");
 	// Skip STC ping marking for monitor mode
 	if ((pkt_type == QDF_NBUF_CB_PACKET_TYPE_ICMP) && (dp_intf->device_mode != QDF_MONITOR_MODE))
 		wlan_dp_stc_mark_ping_ts(dp_ctx,
 					 peer_info.peer_id);
 	/* check whether need to linearize nbuf, like non-linear udp data */
-	pr_info("dp_start_xmit: Linearizing nbuf if needed\n");
 	if (dp_nbuf_nontso_linearize(nbuf) != QDF_STATUS_SUCCESS) {
 		dp_err_rl(" nbuf %pK linearize failed. drop the pkt", nbuf);
-		pr_info("dp_start_xmit: Nbuf linearization failed, dropping packet\n");
 		goto drop_pkt_and_release_nbuf;
 	}
 
 	/*
 	* If a transmit function is not registered, drop packet
 	*/
-	pr_info("dp_start_xmit: Checking if TX function is registered\n");
 	if (!dp_intf->txrx_ops.tx.tx) {
 		dp_err_rl("TX function not registered by the data path");
-		pr_info("dp_start_xmit: TX function not registered, dropping packet\n");
 		goto drop_pkt_and_release_nbuf;
 	}
 
 	// Skip broadcast EAPOL fix for monitor mode
 	if (dp_intf->device_mode != QDF_MONITOR_MODE) {
-		pr_info("dp_start_xmit: Fixing broadcast EAPOL if needed\n");
 		dp_fix_broadcast_eapol(dp_link, nbuf);
 	}
 
-	pr_info("dp_start_xmit: Calling TX function %pS\n", dp_intf->txrx_ops.tx.tx);
 	if (dp_intf->txrx_ops.tx.tx(soc, dp_link->link_id, nbuf)) {
 		dp_debug_rl("Failed to send packet from adapter %u",
 			    dp_link->link_id);
-		pr_info("dp_start_xmit: TX function failed, dropping packet\n");
 		goto drop_pkt_and_release_nbuf;
 	}
 
-	pr_info("dp_start_xmit: Packet transmitted successfully\n");
 	return QDF_STATUS_SUCCESS;
 
 drop_pkt_and_release_nbuf:
-	pr_info("dp_start_xmit: Releasing skb in drop_pkt_and_release_nbuf\n");
 	qdf_net_buf_debug_release_skb(nbuf);
 drop_pkt:
-	pr_info("dp_start_xmit: Handling dropped packet\n");
 
 	/* track connectivity stats */
 	if (dp_intf->pkt_type_bitmap) {
-		pr_info("dp_start_xmit: Collecting connectivity stats for dropped packet\n");
 		dp_tx_rx_collect_connectivity_stats_info(nbuf, dp_link,
 							 PKT_TYPE_TX_DROPPED,
 							 &pkt_type);
 	}
-	pr_info("dp_start_xmit: Tracing dropped packet data\n");
 	qdf_dp_trace_data_pkt(nbuf, QDF_TRACE_DEFAULT_PDEV_ID,
 			      QDF_DP_TRACE_DROP_PACKET_RECORD, 0,
 			      QDF_TX);
-	pr_info("dp_start_xmit: Freeing nbuf\n");
 	qdf_nbuf_kfree(nbuf);
 
 drop_pkt_accounting:
-	pr_info("dp_start_xmit: Updating dropped packet statistics\n");
 
 	qdf_net_stats_inc_tx_dropped(&dp_intf->stats);
 	++stats->per_cpu[cpu].tx_dropped;
 	if (is_arp) {
 		++dp_intf->dp_stats.arp_stats.tx_dropped;
 		dp_info_rl("ARP packet dropped");
-		pr_info("dp_start_xmit: ARP packet dropped\n");
 	} else if (is_eapol) {
 		++dp_intf->dp_stats.eapol_stats.
 				tx_dropped[subtype - QDF_PROTO_EAPOL_M1];
-		pr_info("dp_start_xmit: EAPOL packet dropped\n");
 	} else if (is_dhcp) {
 		++dp_intf->dp_stats.dhcp_stats.
 				tx_dropped[subtype - QDF_PROTO_DHCP_DISCOVER];
-		pr_info("dp_start_xmit: DHCP packet dropped\n");
 	}
 
-	pr_info("dp_start_xmit: Completed with failure status\n");
 	return QDF_STATUS_E_FAILURE;
 }
 

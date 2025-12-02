@@ -1114,10 +1114,6 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 	} else
 		queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
 				  vdev->pdev->soc->num_tcl_data_rings);
-
-	pr_info("%s: vdev_id=%u, pdev_id=%u, desc_pool_id=%u, ring_id=%u\n", 
-	__func__, vdev->vdev_id, vdev->pdev->pdev_id, 
-	queue->desc_pool_id, queue->ring_id);
 }
 #elif defined(IPA_OFFLOAD)
 static inline void dp_tx_get_queue(struct dp_vdev *vdev,
