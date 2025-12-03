@@ -1439,24 +1439,18 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
 
-	pr_info("%s: start vdev_id=%u mode=%d\n", __func__, vdev->vdev_id, vdev->opmode);
-
 	if (dp_tx_limit_check(vdev, nbuf)) {
-		pr_info("%s: tx limit check failed\n", __func__);
 		return NULL;
 	}
 
 	/* Allocate software Tx descriptor */
 	if (nbuf->protocol == QDF_NBUF_TRAC_EAPOL_ETH_TYPE) {
-		pr_info("%s: EAPOL packet, using special descriptor\n", __func__);
 		tx_desc = dp_tx_spcl_desc_alloc(soc, desc_pool_id);
 	} else {
-		pr_info("%s: normal packet, using normal descriptor\n", __func__);
 		tx_desc = dp_tx_desc_alloc(soc, desc_pool_id);
 	}
 
 	if (!tx_desc) {
-		pr_info("%s: Tx descriptor allocation failed\n", __func__);
 		DP_STATS_INC(vdev,
 			     tx_i[msdu_info->xmit_type].dropped.desc_na.num, 1);
 		return NULL;
@@ -1481,7 +1475,6 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 	/* Allocate and prepare an extension descriptor for scattered frames */
 	msdu_ext_desc = dp_tx_prepare_ext_desc(vdev, msdu_info, desc_pool_id);
 	if (!msdu_ext_desc) {
-		pr_info("%s: Tx Extension Descriptor Alloc Fail\n", __func__);
 		dp_tx_info("Tx Extension Descriptor Alloc Fail");
 		goto failure;
 	}
@@ -1494,7 +1487,6 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 		/* Temporary WAR due to TQM VP issues */
 		tx_desc->flags |= DP_TX_DESC_FLAG_TO_FW;
 		qdf_atomic_inc(&soc->num_tx_exception);
-		pr_info("%s: Exception frame detected\n", __func__);
 	}
 
 
@@ -1508,16 +1500,12 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 
 	if (msdu_ext_desc->flags & DP_TX_EXT_DESC_FLAG_METADATA_VALID) {
 		tx_desc->length = HAL_TX_EXT_DESC_WITH_META_DATA;
-		pr_info("%s: metadata valid, length=%u\n", __func__, tx_desc->length);
 	} else {
 		tx_desc->length = HAL_TX_EXTENSION_DESC_LEN_BYTES;
-		pr_info("%s: metadata invalid, length=%u\n", __func__, tx_desc->length);
 	}
 
-	pr_info("%s: completed successfully\n", __func__);
 	return tx_desc;
 failure:
-	pr_info("%s: failed, releasing descriptor\n", __func__);
 	dp_tx_desc_release(soc, tx_desc, desc_pool_id);
 	return NULL;
 }
@@ -3493,8 +3481,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	uint8_t prep_desc_fail = 0, hw_enq_fail = 0;
 
-	pr_info("%s: Enter, vdev_id=%d, frm_type=%d, num_seg=%d\n",
-		__func__, vdev->vdev_id, msdu_info->frm_type, msdu_info->num_seg);
 
 	if (msdu_info->frm_type == dp_tx_frm_me)
 		nbuf = msdu_info->u.sg_info.curr_seg->nbuf;
@@ -3506,8 +3492,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	 * descriptors using information in msdu_info
 	 */
 	while (i < msdu_info->num_seg) {
-		pr_info("%s: Processing segment %d/%d\n", __func__,
-			i+1, msdu_info->num_seg);
 		/*
 		 * Setup Tx descriptor for an MSDU, and MSDU extension
 		 * descriptor
@@ -3516,10 +3500,8 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				tx_q->desc_pool_id);
 
 		if (!tx_desc) {
-			pr_info("%s: tx_desc preparation failed for segment %d\n", __func__, i+1);
 			if (msdu_info->frm_type == dp_tx_frm_me) {
 				prep_desc_fail++;
-				pr_info("%s: ME frame desc prep failed, count=%d\n", __func__, prep_desc_fail);
 				dp_tx_me_free_buf(pdev,
 					(void *)(msdu_info->u.sg_info
 						.curr_seg->frags[0].vaddr));
@@ -3528,7 +3510,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 					 * Unmap is needed only if descriptor
 					 * preparation failed for all segments.
 					 */
-					pr_info("%s: All segments failed, unmapping nbuf\n", __func__);
 					qdf_nbuf_unmap(soc->osdev,
 						       msdu_info->u.sg_info.
 						       curr_seg->nbuf,
@@ -3554,7 +3535,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			}
 
 			if (msdu_info->frm_type == dp_tx_frm_tso) {
-				pr_info("%s: TSO frame desc prep failed\n", __func__);
 				dp_tx_tso_seg_history_add(
 						soc,
 						msdu_info->u.tso_info.curr_seg,
@@ -3574,15 +3554,11 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			}
 
 			if (msdu_info->frm_type == dp_tx_frm_sg) {
-				pr_info("%s: SG frame desc prep failed, unmapping buf\n", __func__);
 				dp_tx_sg_unmap_buf(soc, nbuf, msdu_info);
 			}
 
-			pr_info("%s: Desc prep failed, goto done\n", __func__);
 			goto done;
 		}
-
-		pr_info("%s: Desc prepared successfully for segment %d\n", __func__, i+1);
 
 		if (msdu_info->frm_type == dp_tx_frm_me) {
 			tx_desc->msdu_ext_desc->me_buffer =
@@ -3632,22 +3608,15 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		/*
 		 * Enqueue the Tx MSDU descriptor to HW for transmit
 		 */
-		pr_info("%s: Calling TX function %pS\n", __func__, soc->arch_ops.tx_hw_enqueue);
 		status = soc->arch_ops.tx_hw_enqueue(soc, vdev, tx_desc,
 						     htt_tcl_metadata,
 						     NULL, msdu_info);
-
-		pr_info("%s: tx_hw_enqueue returned %d for segment %d\n", __func__,
-			status, i+1);
 
 		dp_tx_check_and_flush_hp(soc, status, msdu_info);
 
 		if (status != QDF_STATUS_SUCCESS) {
 			dp_info_rl("Tx_hw_enqueue Fail tx_desc %pK queue %d",
 				   tx_desc, tx_q->ring_id);
-
-			pr_info("%s: tx_hw_enqueue FAILED for segment %d, status=%d\n", __func__,
-				i+1, status);
 
 			dp_tx_get_tid(vdev, nbuf, msdu_info);
 			tid_stats = &pdev->stats.tid_stats.
@@ -3656,13 +3625,11 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 			if (msdu_info->frm_type == dp_tx_frm_me) {
 				hw_enq_fail++;
-				pr_info("%s: ME frame hw enqueue failed, count=%d\n", __func__, hw_enq_fail);
 				if (hw_enq_fail == msdu_info->num_seg) {
 					/*
 					 * Unmap is needed only if enqueue
 					 * failed for all segments.
 					 */
-					pr_info("%s: All segments hw enqueue failed, unmapping nbuf\n", __func__);
 					qdf_nbuf_unmap(soc->osdev,
 						       msdu_info->u.sg_info.
 						       curr_seg->nbuf,
@@ -3701,7 +3668,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				 * unmap and free current,
 				 * retransmit remaining segments
 				 */
-				pr_info("%s: TSO frame hw enqueue failed, freeing buffer\n", __func__);
 				dp_tx_comp_free_buf(soc, tx_desc, false);
 				i++;
 				dp_tx_desc_release(soc, tx_desc,
@@ -3710,16 +3676,12 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			}
 
 			if (msdu_info->frm_type == dp_tx_frm_sg) {
-				pr_info("%s: SG frame hw enqueue failed, unmapping buf\n", __func__);
 				dp_tx_sg_unmap_buf(soc, nbuf, msdu_info);
 			}
 
-			pr_info("%s: Releasing tx desc due to hw enqueue failure\n", __func__);
 			dp_tx_desc_release(soc, tx_desc, tx_q->desc_pool_id);
 			goto done;
 		}
-
-		pr_info("%s: Segment %d enqueued successfully\n", __func__, i+1);
 
 		dp_tx_update_ts_on_enqueued(vdev, msdu_info, tx_desc);
 
@@ -3741,9 +3703,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				msdu_info->u.sg_info.curr_seg =
 					msdu_info->u.sg_info.curr_seg->next;
 				nbuf = msdu_info->u.sg_info.curr_seg->nbuf;
-				pr_info("%s: Moving to next segment\n", __func__);
 			} else {
-				pr_info("%s: No more segments\n", __func__);
 				break;
 			}
 		}
@@ -3751,10 +3711,8 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	}
 
 	nbuf = NULL;
-	pr_info("%s: All segments processed successfully\n", __func__);
 
 done:
-	pr_info("%s: Exit, returning nbuf=%pK\n", __func__, nbuf);
 	return nbuf;
 }
 
