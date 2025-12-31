@@ -33,3 +33,4 @@
 ../vendor/oplus/kernel/power/power_hook
 ../vendor/oplus/kernel/power/rpmh
 ../vendor/oplus/kernel/power/subsys_sleep_monitor/bazel
+../vendor/oplus/kernel/patch

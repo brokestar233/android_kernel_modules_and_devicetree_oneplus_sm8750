@@ -2643,8 +2643,10 @@ static u32 goodix_u32_trigger_reason(void *chip_data,
 	u8 touch_num = 0;
 	u8 point_type = 0;
 	u32 result_event = 0;
+	u16 tmp = 0;
 	int pre_read_len;
 	u8 event_status;
+	char *kb_matrix_str = NULL;
 	struct goodix_ic_info_misc *misc;
 	struct chip_data_brl *chip_info = (struct chip_data_brl *)chip_data;
 
@@ -2745,6 +2747,24 @@ static u32 goodix_u32_trigger_reason(void *chip_data,
 		}
 
 		point_type = chip_info->touch_data[IRQ_EVENT_HEAD_LEN] & 0x0F;
+		if (chip_info->kb_matrix_cal_num_support && point_type == POINT_TYPE_TOUCH) {
+			if (chip_info->kb_matrix_cal_num == 0xffff) {
+				chip_info->kb_matrix_cal_num = chip_info->touch_data[GESTURE_DATA_ADDR_SIZE];
+				TPD_INFO("GT:%s: get chip kb_matrix_cal_num = %u.\n", __func__, chip_info->kb_matrix_cal_num);
+			} else if (chip_info->kb_matrix_cal_num != chip_info->touch_data[GESTURE_DATA_ADDR_SIZE]) {
+				tmp = chip_info->kb_matrix_cal_num;
+				chip_info->kb_matrix_cal_num = chip_info->touch_data[GESTURE_DATA_ADDR_SIZE];
+				TPD_INFO("GT:%s: chip kb_matrix_cal_num %u update to %u .\n", __func__, tmp, chip_info->kb_matrix_cal_num);
+				kb_matrix_str = kzalloc(30, GFP_KERNEL);
+				if (!kb_matrix_str) {
+					TPD_INFO("GT:kb_matrix_str kzalloc failed.\n");
+				} else {
+					snprintf(kb_matrix_str, 30, "kb_matrix_%u_to_%u", tmp, chip_info->kb_matrix_cal_num);
+					tp_healthinfo_report(chip_info->monitor_data, HEALTH_REPORT, kb_matrix_str);
+					kfree(kb_matrix_str);
+				}
+			}
+		}
 		if (point_type == POINT_TYPE_STYLUS ||
 				point_type == POINT_TYPE_STYLUS_HOVER) {
 			ret = checksum_cmp(&chip_info->touch_data[IRQ_EVENT_HEAD_LEN],
@@ -5979,6 +5999,7 @@ static void init_goodix_chip_dts(struct device *dev, void *chip_data)
 	np = dev->of_node;
 	chip_info->snr_read_support = of_property_read_bool(np, "snr_read_support");
 	chip_info->fpga_spi_agg_support = of_property_read_bool(np, "fpga_spi_agg_support");
+	chip_info->kb_matrix_cal_num_support = of_property_read_bool(np, "kb_matrix_cal_num_support");
 
 	chip_np = of_get_child_by_name(np, "GT9966");
 	if (!chip_np) {
@@ -6245,6 +6266,7 @@ static int goodix_gt9966_ts_probe(struct spi_device *spi)
 	chip_info->monitor_data = &ts->monitor_data;
 	chip_info->kernel_grip_support = ts->kernel_grip_support;
 	chip_info->tp_index = ts->tp_index;
+	chip_info->kb_matrix_cal_num = 0xffff;
 
 	chip_info->max_x = ts->resolution_info.max_x;
 	chip_info->max_y = ts->resolution_info.max_y;

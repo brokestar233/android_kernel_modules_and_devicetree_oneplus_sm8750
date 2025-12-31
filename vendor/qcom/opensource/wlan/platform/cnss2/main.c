@@ -2342,6 +2342,9 @@ static int cnss_do_recovery(struct cnss_plat_data *plat_priv,
 			cnss_pr_dbg("Skip link down recovery as link is already up\n");
 			return 0;
 		}
+
+		cnss_bus_notify_mhi_error(plat_priv);
+
 		if (test_bit(LINK_DOWN_SELF_RECOVERY,
 			     &plat_priv->ctrl_params.quirks))
 			goto self_recovery;

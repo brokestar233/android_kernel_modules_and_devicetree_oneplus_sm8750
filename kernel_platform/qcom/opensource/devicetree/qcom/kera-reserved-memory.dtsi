@@ -198,6 +198,11 @@
 		reg = <0x0 0x99e00000 0x0 0x3000000>;
 	};
 
+	gunyah_hyp_mem1: gunyah_hyp_region1@a59c0000 {
+		no-map;
+		reg = <0x0 0xa59c0000 0x0 0x800000>;
+	};
+
 	wlan_msa_mem: wlan_msa_region@a6400000 {
 		no-map;
 		reg = <0x0 0xa6400000 0x0 0xc00000>;

@@ -39,6 +39,7 @@ extern int g_debug_enable;
 extern inline void systrace_c_printk(const char *msg, unsigned long val);
 extern inline void systrace_c_signed_printk(const char *msg, long val);
 extern inline void htb_systrace_c_printk(const char *prefix, int digit, const char *comm, int val);
+extern inline void systrace_c_printk_common(const char *msg, unsigned long val, int id);
 
 int cpu_load_init(void);
 void frame_load_init(void);
@@ -95,6 +96,12 @@ void ttwu_frame_detect_hook(struct task_struct *task);
 /*----------------------------- frame detect end -----------------------------*/
 
 /*----------------------------- ch boost req start -----------------------------*/
+#define CRITICAL_TASK_NUM 2
+void get_critical_task_name(char *unityMain_name, char *unityGfxDevice_name);
+void update_ctb_pids(pid_t game_tgid, pid_t unitymain_pid, pid_t unitygfxdevice_pid);
+bool get_ctb_enable(void);
+bool get_htb_enable(void);
+
 enum CH_BOOST_ACTION {
 	CT_REQUSET_BOOST,
 	CT_RELEASE_BOOST,

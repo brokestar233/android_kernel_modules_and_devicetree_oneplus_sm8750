@@ -51,8 +51,8 @@
 #define MAX_UXMEM_POOL_ALLOC_RETRIES (5)
 
 static const unsigned int orders[] = {0, 1};
-/* 96M for order 0, 8M  for order1 by default */
-static const unsigned int page_pool_nr_pages[] = {((SZ_64M + SZ_32M) >> PAGE_SHIFT), (SZ_8M >> PAGE_SHIFT)};
+/* 96M for order 0, 8M  for order 1 by default */
+static unsigned int page_pool_nr_pages[] = {((SZ_64M + SZ_32M) >> PAGE_SHIFT), (SZ_8M >> PAGE_SHIFT)};
 #define NUM_ORDERS ARRAY_SIZE(orders)
 static struct page_pool *pools[NUM_ORDERS];
 static struct task_struct *ux_page_pool_tsk = NULL;
@@ -515,6 +515,11 @@ static int ux_page_pool_init(void)
 		.symbol_name = "prep_compound_page"
 	};
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	struct config_oplus_bsp_uxmem_opt *config;
+	config = oplus_read_mm_config(module_name_uxmem_opt);
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
+
 	/* get some symbols address using kprobe */
 	ret = register_kprobe(&post_alloc_hook_kp);
 	if (ret) {
@@ -533,6 +538,15 @@ static int ux_page_pool_init(void)
 	prep_compound_page_dup = (prep_compound_page_t)prep_compound_page_kp.addr;
 	pr_info("suceesfully get prep_compound_page addr:0x%px\n", prep_compound_page_dup);
 	unregister_kprobe(&prep_compound_page_kp);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	if (config && config->page_pool_order0_mb) {
+		page_pool_nr_pages[0] = config->page_pool_order0_mb * SZ_1M / PAGE_SIZE;
+	}
+	if (config && config->page_pool_order1_mb) {
+		page_pool_nr_pages[1] = config->page_pool_order1_mb * SZ_1M / PAGE_SIZE;
+	}
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 
 	for (i = 0; i < NUM_ORDERS; i++) {
 		pools[i] = ux_page_pool_create((GFP_HIGHUSER | __GFP_ZERO | __GFP_NOWARN |

@@ -56,7 +56,7 @@
 
 /* Private */
 
-#define WMA_READY_EVENTID_TIMEOUT          6000
+#define WMA_READY_EVENTID_TIMEOUT          12000
 #define WMA_SERVICE_READY_EXT_TIMEOUT      6000
 #define NAN_CLUSTER_ID_BYTES               4
 

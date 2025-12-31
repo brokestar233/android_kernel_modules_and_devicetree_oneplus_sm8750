@@ -9,7 +9,6 @@
 					   CHG_PROTOCOL_PD
 					   CHG_PROTOCOL_PPS
 					   CHG_PROTOCOL_VOOC>;
-	oplus,protocol_wait_list = <CHG_PROTOCOL_VOOC 1000>;
 };
 
 &battery_charger {

@@ -114,6 +114,13 @@ config OPLUS_EXIT_MM_OPTIMIZE
 	help
 	  define this config to exit mm optimize
 
+config ABORT_MM_OPT
+	tristate "abort reclaim and compact memory"
+	default n
+	help
+	  When performing memory reclaim or memory compaction, it allows to abort when
+	  receive a signal or cpu-usage is too high.
+
 source "mm/oplus_mm/hybridswap_zram/Kconfig"
 
 source "mm/oplus_mm/mm_osvelte/Kconfig"

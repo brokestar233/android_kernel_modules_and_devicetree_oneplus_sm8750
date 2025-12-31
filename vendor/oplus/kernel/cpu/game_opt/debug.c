@@ -62,6 +62,11 @@ inline void systrace_c_signed_printk(const char *msg, long val)
 	}
 }
 
+inline void systrace_c_printk_common(const char *msg, unsigned long val, int id)
+{
+	systrace_c_printk_base(msg, val, 1, id);
+}
+
 inline void htb_systrace_c_printk(const char *prefix, int digit, const char *comm, int val)
 {
 	if (g_debug_enable == 1) {

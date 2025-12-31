@@ -385,8 +385,8 @@ struct cs_press_t {
     int wdt_reset_cnt;
     int bus_error_cnt;
     char bus_error_msg[BUS_ERROR_MSG_CNT][BUS_ERROR_MSG_SIZE];
-    int32_t dac_offset_boot[CH_COUNT];
-    int32_t dac_noise_var_boot[CH_COUNT];
+    //int32_t dac_offset_boot[CH_COUNT];
+    //int32_t dac_noise_var_boot[CH_COUNT];
     char fw_update_error;
 
     /* framebuffer callbacks notifier */

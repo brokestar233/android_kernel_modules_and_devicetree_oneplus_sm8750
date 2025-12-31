@@ -611,6 +611,12 @@ bool need_resched_ux(struct oplus_rq *orq, struct oplus_task_struct *curr, unsig
 	return ((u64)vdiff > ideal_runtime);
 }
 
+/*
+ * Should 'ots' preempt 'curr'.
+ * Check whether ots's vruntime exceeds curr's vruntime by the gran value.
+ *
+ * Returns 1 if the ots should preempt the curr, otherwise returns <=0
+ */
 int preempt_compare(struct oplus_task_struct *curr, struct oplus_task_struct *ots, u64 gran)
 {
 	s64 gran_vtime, vdiff;

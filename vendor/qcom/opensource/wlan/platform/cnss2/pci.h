@@ -343,4 +343,5 @@ int cnss_pci_get_user_msi_assignment(struct cnss_pci_data *pci_priv,
 				     u32 *user_base_data,
 				     u32 *base_vector);
 void cnss_register_iommu_fault_handler_irq(struct cnss_pci_data *pci_priv);
+void cnss_pci_notify_mhi_error(struct cnss_pci_data *pci_priv);
 #endif /* _CNSS_PCI_H */

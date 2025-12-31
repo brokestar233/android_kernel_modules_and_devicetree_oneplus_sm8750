@@ -3320,7 +3320,7 @@ void tfa98xx_vsvoter_set(struct tfa98xx *tfa98xx)
 	val = tfa98xx->vsv_mask;
 
 	regmap_update_bits(tfa98xx->vsv, reg, msk, val);
-	dev_info(tfa98xx->dev, "%s set voter for vs\n", __func__);
+	dev_dbg(tfa98xx->dev, "%s set voter for vs\n", __func__);
 
 }
 
@@ -3337,7 +3337,7 @@ void tfa98xx_vsvoter_clr(struct tfa98xx *tfa98xx)
 	val = tfa98xx->vsv_mask;
 
 	regmap_update_bits(tfa98xx->vsv, reg, msk, val);
-	dev_info(tfa98xx->dev, "%s clr voter for vs\n", __func__);
+	dev_dbg(tfa98xx->dev, "%s clr voter for vs\n", __func__);
 
 }
 

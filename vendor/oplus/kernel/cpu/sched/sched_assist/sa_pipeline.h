@@ -20,6 +20,8 @@ bool oplus_pipeline_task_skip_cpu(struct task_struct *task, unsigned int dst_cpu
 bool oplus_pipeline_prime_cpu_capacity_fit(struct task_struct *p, struct rq *rq);
 bool oplus_pipeline_rt_skip_prime_cpu(unsigned int dst_cpu);
 
+struct task_struct *oplus_pipeline_get_prime_task(void);
+
 typedef int (*core_ctl_set_boost_t)(bool boost);
 typedef int (*core_ctl_set_cluster_boost_t)(int idx, bool boost);
 

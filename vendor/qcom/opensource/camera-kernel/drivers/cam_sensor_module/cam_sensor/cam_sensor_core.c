@@ -994,6 +994,25 @@ int32_t cam_handle_cmd_buffers_for_probe(void *cmd_buf,
 			CAM_ERR(CAM_SENSOR, "Updating the slave Info");
 			return rc;
 		}
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+		if (probe_ver == CAM_SENSOR_PACKET_OPCODE_SENSOR_PROBE_V2) {
+			probe_info = (struct cam_cmd_probe *)
+			    (cmd_buf + sizeof(struct cam_cmd_i2c_info) + sizeof(struct cam_cmd_probe_v2));
+		} else {
+			probe_info = (struct cam_cmd_probe *)
+			    (cmd_buf + sizeof(struct cam_cmd_i2c_info) + sizeof(struct cam_cmd_probe));
+		}
+		if (cmd_buf_length >= (size_t)((uintptr_t)probe_info - (uintptr_t)cmd_buf)) {
+			rc = cam_sensor_update_id_info(probe_info, s_ctrl);
+			if (rc < 0) {
+			    CAM_ERR(CAM_SENSOR, "Updating the id Info");
+			    return rc;
+			}
+		} else {
+			CAM_ERR(CAM_SENSOR, "Invalid probe info offset");
+			return -EINVAL;
+		}
+#endif
 	}
 		break;
 	case 1: {
@@ -1292,6 +1311,10 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 				slave_info->sensor_id);
 		return -ENODEV;
 	}
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+        rc = cam_sensor_match_id_oem(s_ctrl,chipid);
+#endif
 
 	return rc;
 }
@@ -2150,6 +2173,7 @@ int cam_sensor_power_up(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->sensor_qsc_setting.qscsetting_state = CAM_SENSOR_SETTING_WRITE_INVALID;
 	mutex_unlock(&(s_ctrl->sensor_initsetting_mutex));
 	mutex_unlock(&(s_ctrl->sensor_power_state_mutex));
+	mempool_set_sensor_powerup();
 #endif
 
 	return rc;
@@ -2261,6 +2285,7 @@ int cam_sensor_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 	s_ctrl->sensor_qsc_setting.qscsetting_state = CAM_SENSOR_SETTING_WRITE_INVALID;
 	mutex_unlock(&(s_ctrl->sensor_initsetting_mutex));
 	mutex_unlock(&(s_ctrl->sensor_power_state_mutex));
+	mempool_set_sensor_powerdown();
 #endif
 	return rc;
 

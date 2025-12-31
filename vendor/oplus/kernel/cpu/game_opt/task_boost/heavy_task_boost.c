@@ -54,6 +54,17 @@ static int boost_strategy = 0;
 static bool htb_enable = false;
 static bool cpu_topo_info_inited = false;
 
+bool get_htb_enable(void)
+{
+    bool ret = false;
+    unsigned long flags;
+
+    raw_spin_lock_irqsave(&htb_spinlock, flags);
+    ret = htb_enable;
+    raw_spin_unlock_irqrestore(&htb_spinlock, flags);
+    return ret;
+}
+
 static noinline bool render_is_running(void)
 {
 	int i;

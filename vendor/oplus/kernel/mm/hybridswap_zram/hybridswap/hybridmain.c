@@ -176,7 +176,8 @@ ssize_t hybridswap_loglevel_show(struct device *dev,
 }
 
 /* Make sure the memcg is not NULL in caller */
-memcg_hybs_t *hybridswap_cache_alloc(struct mem_cgroup *memcg, bool atomic)
+memcg_hybs_t *hybridswap_cache_alloc(struct mem_cgroup *memcg, bool atomic,
+				     bool css_alloc)
 {
 	memcg_hybs_t *hybs;
 	u64 ret;
@@ -193,6 +194,8 @@ memcg_hybs_t *hybridswap_cache_alloc(struct mem_cgroup *memcg, bool atomic)
 		log_err("alloc memcg_hybs_t failed\n");
 		return NULL;
 	}
+
+	hybs->css_alloc = css_alloc;
 
 	INIT_LIST_HEAD(&hybs->score_node);
 #ifdef CONFIG_HYBRIDSWAP_CORE
@@ -229,7 +232,7 @@ static void mem_cgroup_alloc_hook(void *data, struct mem_cgroup *memcg)
 	if (memcg->android_oem_data1[0])
 		BUG();
 
-	hybridswap_cache_alloc(memcg, true);
+	hybridswap_cache_alloc(memcg, true, true);
 }
 
 static void mem_cgroup_free_hook(void *data, struct mem_cgroup *memcg)
@@ -276,12 +279,21 @@ static void mem_cgroup_css_offline_hook(void *data,
 		struct cgroup_subsys_state *css, struct mem_cgroup *memcg)
 {
 	unsigned long flags;
+	memcg_hybs_t *hybs = MEMCGRP_ITEM_DATA(memcg);
 
-	if (memcg->android_oem_data1[0]) {
+	if (hybs) {
 		spin_lock_irqsave(&score_list_lock, flags);
 		list_del_init(&MEMCGRP_ITEM(memcg, score_node));
 		spin_unlock_irqrestore(&score_list_lock, flags);
-		css_put(css);
+
+		/*
+		 * if hybs allocated after css_alloc(), then css refcount is
+		 * error without css_get(). Actually we can remove get/put in
+		 * hooks, however, for compatiable, just invokes css_put()
+		 * if alloc in css_alloc_hook().
+		 */
+		if (hybs->css_alloc)
+			css_put(css);
 	}
 }
 
@@ -518,6 +530,12 @@ unsigned long memcg_anon_pages(struct mem_cgroup *memcg)
 		memcg_lru_pages(memcg, NR_ACTIVE_ANON);
 }
 
+static bool inactive_file_is_low(struct mem_cgroup *memcg)
+{
+	unsigned long nr_inactive_file = memcg_page_state_local(memcg, NR_INACTIVE_FILE);
+	return nr_inactive_file < (SZ_512M + SZ_256M) / PAGE_SIZE;
+}
+
 /* Shrink by free a batch of pages */
 static int force_shrink_batch(struct mem_cgroup * memcg,
 			      unsigned long nr_need_reclaim,
@@ -529,6 +547,10 @@ static int force_shrink_batch(struct mem_cgroup * memcg,
 	gfp_t gfp_mask = GFP_KERNEL;
 
 	while (*nr_reclaimed < nr_need_reclaim) {
+		if (reclaim_options != MEMCG_RECLAIM_MAY_SWAP &&
+		    inactive_file_is_low(memcg))
+			break;
+
 		unsigned long reclaimed;
 		reclaimed = try_to_free_mem_cgroup_pages(memcg,
 			batch, gfp_mask, reclaim_options);
@@ -547,8 +569,8 @@ static int force_shrink_batch(struct mem_cgroup * memcg,
 		}
 	}
 
-	log_warn("%s try to reclaim %lu pages and reclaim %lu pages\n",
-		 MEMCGRP_ITEM(memcg, name), nr_need_reclaim, *nr_reclaimed);
+	log_warn("%s try to reclaim %lu pages and reclaim %lu pages option: %d\n",
+		 MEMCGRP_ITEM(memcg, name), nr_need_reclaim, *nr_reclaimed, reclaim_options);
 	return ret;
 }
 
@@ -665,6 +687,9 @@ static ssize_t mem_cgroup_force_shrink(struct kernfs_open_file *of,
 	unsigned int reclaim_options = 0;
 
 	memcg = mem_cgroup_from_css(of_css(of));
+	if (file && inactive_file_is_low(memcg))
+		return -EBUSY;
+
 	nr_need_reclaim = get_reclaim_pages(memcg, file, buf, &batch, &nr_reclaimed);
 	if (!file) {
 		reclaim_options = MEMCG_RECLAIM_MAY_SWAP;
@@ -871,7 +896,7 @@ static ssize_t mem_cgroup_name_write(struct kernfs_open_file *of, char *buf,
 	int len, w_len;
 
 	if (unlikely(hybp == NULL)) {
-		hybp = hybridswap_cache_alloc(memcg, false);
+		hybp = hybridswap_cache_alloc(memcg, false, false);
 		if (!hybp)
 			return -EINVAL;
 	}
@@ -912,7 +937,7 @@ static int mem_cgroup_app_score_write(struct cgroup_subsys_state *css,
 	memcg = mem_cgroup_from_css(css);
 	hybs = MEMCGRP_ITEM_DATA(memcg);
 	if (!hybs) {
-		hybs = hybridswap_cache_alloc(memcg, false);
+		hybs = hybridswap_cache_alloc(memcg, false, false);
 		if (!hybs)
 			return -EINVAL;
 	}
@@ -948,7 +973,7 @@ int mem_cgroup_app_uid_write(struct cgroup_subsys_state *css,
 	hybs = MEMCGRP_ITEM_DATA(memcg);
 
 	if (unlikely(hybs == NULL)) {
-		hybs = hybridswap_cache_alloc(memcg, false);
+		hybs = hybridswap_cache_alloc(memcg, false, false);
 		if (!hybs)
 			return -EINVAL;
 	}

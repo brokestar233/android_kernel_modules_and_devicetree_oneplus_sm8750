@@ -1855,6 +1855,19 @@ static inline void cnss_mhi_report_error(struct cnss_pci_data *pci_priv)
 static inline void cnss_mhi_report_error(struct cnss_pci_data *pci_priv) {}
 #endif
 
+void cnss_pci_notify_mhi_error(struct cnss_pci_data *pci_priv)
+{
+
+	if (!pci_priv)
+		return;
+
+	if (pci_priv->pci_link_down_ind) {
+		cnss_pr_dbg("Notifying MHI about link down\n");
+		/* Notify MHI about link down*/
+		cnss_mhi_report_error(pci_priv);
+	}
+}
+
 void cnss_pci_handle_linkdown(struct cnss_pci_data *pci_priv)
 {
 	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
@@ -1873,9 +1886,6 @@ void cnss_pci_handle_linkdown(struct cnss_pci_data *pci_priv)
 	}
 	pci_priv->pci_link_down_ind = true;
 	spin_unlock_irqrestore(&pci_link_down_lock, flags);
-
-	/* Notify MHI about link down*/
-	cnss_mhi_report_error(pci_priv);
 
 	if (pci_dev->device == QCA6174_DEVICE_ID)
 		disable_irq_nosync(pci_dev->irq);

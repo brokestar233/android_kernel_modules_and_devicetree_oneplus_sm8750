@@ -21003,6 +21003,11 @@ static int hdd_set_max_tx_bandwidth_config(struct wlan_hdd_link_info *link_info,
 		return -EINVAL;
 	}
 
+	if (!wlan_cm_is_vdev_connected(link_info->vdev) || hdd_is_chan_switch_in_progress()) {
+		hdd_err("vdev not connected or chan switch in progress");
+		return -EINVAL;
+	}
+
 	ret = 0;
 	default_bw = link_info->adapter->deflink->session.station.conn_info.ch_width;
 	tx_bw = nla_get_u16(attr);

@@ -1053,6 +1053,16 @@ scm_update_channel_list(struct scan_start_request *req,
 	     !scan_obj->miracast_enabled)
 		skip_dfs_ch = false;
 
+	if (skip_dfs_ch) {
+		scm_nofl_debug("skip dfs ch allow_dfs_chan_in_scan = %d allow_dfs_chan_in_first_scan = %d first_scan_done = %d skip_dfs_chan_in_p2p_seach = %d p2p_search = %d miracast_enabled = %d",
+				scan_obj->scan_def.allow_dfs_chan_in_scan,
+				scan_obj->scan_def.allow_dfs_chan_in_first_scan,
+				first_scan_done,
+				scan_obj->scan_def.skip_dfs_chan_in_p2p_search,
+				p2p_search,
+				scan_obj->miracast_enabled);
+	}
+
 	for (i = 0; i < req->scan_req.chan_list.num_chan; i++) {
 		uint32_t freq;
 

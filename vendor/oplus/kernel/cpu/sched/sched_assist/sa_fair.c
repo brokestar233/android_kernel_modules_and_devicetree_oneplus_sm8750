@@ -817,7 +817,7 @@ inline void oplus_check_preempt_wakeup(struct rq *rq, struct task_struct *p, boo
 {
 	struct task_struct *curr;
 	struct oplus_rq *orq;
-	struct oplus_task_struct *ots;
+	struct oplus_task_struct *curr_ots;
 	unsigned long irqflag;
 	bool wake_ux;
 	bool curr_ux;
@@ -832,7 +832,7 @@ inline void oplus_check_preempt_wakeup(struct rq *rq, struct task_struct *p, boo
 
 	/* this cpu is running in this function, no rcu primitives needed*/
 	curr = rq->curr;
-	ots = get_oplus_task_struct(curr);
+	curr_ots = get_oplus_task_struct(curr);
 #ifdef CONFIG_LOCKING_PROTECT
 	LOCKING_CALL_OP(check_preempt_wakeup, rq, p, preempt, nopreempt);
 	if (*nopreempt == true)
@@ -887,11 +887,11 @@ inline void oplus_check_preempt_wakeup(struct rq *rq, struct task_struct *p, boo
 	orq = get_oplus_rq(rq);
 	spin_lock_irqsave(orq->ux_list_lock, irqflag);
 	smp_mb__after_spinlock();
-	if (!IS_ERR_OR_NULL(ots) && !oplus_rbnode_empty(&ots->ux_entry)) {
-		struct oplus_task_struct *curr = ux_list_first_entry(&orq->ux_list);
-		DEBUG_BUG_ON(curr == NULL);
+	if (!IS_ERR_OR_NULL(curr_ots) && !oplus_rbnode_empty(&curr_ots->ux_entry)) {
+		struct oplus_task_struct *first_ots = ux_list_first_entry(&orq->ux_list);
+		DEBUG_BUG_ON(first_ots == NULL);
 		/* account_ux_runtime(rq, curr); */
-		if (curr != ots && preempt_compare(curr, ots, CFS_WAKEUP_GRAN) == 1) {
+		if (first_ots != curr_ots && preempt_compare(curr_ots, first_ots, CFS_WAKEUP_GRAN) == 1) {
 			*preempt = true;
 		} else {
 			*nopreempt = true;

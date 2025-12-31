@@ -2538,7 +2538,7 @@ enum Tfa98xx_Error tfa98xx_powerdown(struct tfa_device *tfa, int powerdown)
 		change = 1;
 		lnm = tfa_get_bf(tfa, TFA986X_BF_LNM);
 		tfa_set_bf(tfa, TFA986X_BF_LNM, 3);
-		pr_info("%s: set lnm 3 before powerdown.\n", __func__);
+		//pr_debug("%s: set lnm 3 before powerdown.\n", __func__);
 	}
 
 	error = TFA_SET_BF(tfa, PWDN, (uint16_t)powerdown);
@@ -2553,7 +2553,7 @@ enum Tfa98xx_Error tfa98xx_powerdown(struct tfa_device *tfa, int powerdown)
 	/* restore gain after powerdown */
 	if (change) {
 		tfa_set_bf(tfa, TFA986X_BF_LNM, lnm);
-		pr_info("%s: restore lnm[%d] after powerdown.\n", __func__, lnm);
+		//pr_debug("%s: restore lnm[%d] after powerdown.\n", __func__, lnm);
 	}
 
 	return error;

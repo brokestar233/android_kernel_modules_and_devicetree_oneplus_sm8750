@@ -324,7 +324,7 @@ static ssize_t oplus_level_protect_inode_write(struct file *file,
 	struct file *protect_file;
 	long fd = -1;
 	unsigned long num_pages = 0;
-	unsigned int inode_mapcount = -1;
+	int inode_mapcount = -1;
 	unsigned long ino = 0;
 	struct inode_protect_struct *inode_protect_entry = NULL;
 	int fd_len;

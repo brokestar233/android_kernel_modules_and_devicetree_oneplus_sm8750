@@ -77,7 +77,7 @@ static long sync_ctrl_ioctl(struct file* file, unsigned int cmd, unsigned long a
 #endif
 
             htb_notify_frame_produce();
-            ctb_notify_frame_produce();
+			ctb_notify_frame_produce(data.bufferN);
         break;
 
         case CMD_ID_GAMEOPT_EPOLL_CONSUME:
@@ -100,7 +100,7 @@ static long sync_ctrl_ioctl(struct file* file, unsigned int cmd, unsigned long a
 #endif
 
             htb_notify_frame_produce();
-            ctb_notify_frame_produce();
+			ctb_notify_frame_produce(data.bufferN);
         break;
 
         default:

@@ -39,6 +39,20 @@ struct tracepoints_table {
 	bool init;
 };
 
+bool fuzzy_match(const char *pattern, const char *str) {
+	if (pattern == NULL || str == NULL) {
+		return false;
+	}
+	int pattern_len = strlen(pattern);
+	int str_len = strlen(str);
+
+	if (str_len < pattern_len) {
+		return false;
+	}
+
+	return strncmp(str, pattern, pattern_len) == 0;
+}
+
 static noinline int tracing_mark_write(const char *buf)
 {
 	trace_printk(buf);
@@ -59,8 +73,8 @@ struct process_entry *find_process_entry(const char *name) {
 
 	for (i = 0; i < current_index; i++) {
 		if (process_table[i].process_names &&
-			strcmp(process_table[i].process_names, name) == 0) {
-			return &process_table[i];
+			fuzzy_match(process_table[i].process_names, name)) {
+				return &process_table[i];
 		}
 	}
 	return NULL;
@@ -139,6 +153,7 @@ static void init_record_process_names(void) {
 		"assistantscreen",
 		"ndroid.settings",
 		"ndroid.launcher",
+		"[GT]ColdPool#",
 	};
 
 	for (i = 0; i < ARRAY_SIZE(process_names); i++) {
@@ -314,18 +329,50 @@ static ssize_t file_record_proc_read(struct file *file, char __user *buf,
 	return count;
 }
 
+static int handle_add_command(char *name, unsigned long flags)
+{
+	if (current_index >= MAX_PROCESSES_ENTRY) {
+		return -ENOSPC;
+	}
+
+	struct process_entry *entry = add_process_entry(name);
+	if (!entry) {
+		printk(KERN_ERR "Failed to add process: %s\n", name);
+		return -EFAULT;
+	}
+	return 0;
+}
+
+static int process_command(char *cmd, char *name, unsigned long flags)
+{
+	if (!cmd || !name) {
+		return -EINVAL;
+	}
+
+	if (!strncmp(cmd, "-add", sizeof("-add"))) {
+		return handle_add_command(name, flags);
+	} else if (!strncmp(cmd, "-del", sizeof("-del"))) {
+		del_process_entry(name);
+	} else if (!strncmp(cmd, "-clear", sizeof("-clear"))) {
+		clear_all_process_entries();
+	} else {
+		 return -EINVAL;
+	}
+	return 0;
+}
+
 static ssize_t file_record_proc_write(struct file *file, const char __user *buf,
-				size_t count, loff_t *ppos)
+                                      size_t count, loff_t *ppos)
 {
 	char *buffer, *orig;
 	char *cmd;
 	char *name;
 	unsigned long flags;
 	int ret = 0;
-	struct process_entry *entry;
 
-	if (count <= 0)
+	if (count <= 0) {
 		return -EINVAL;
+	}
 
 	buffer = kmalloc(count + 1, GFP_KERNEL);
 	if (!buffer) {
@@ -333,48 +380,24 @@ static ssize_t file_record_proc_write(struct file *file, const char __user *buf,
 	}
 
 	if (copy_from_user(buffer, buf, count)) {
-		kfree(buffer);
+		 kfree(buffer);
 		return -EFAULT;
 	}
 
 	buffer[count] = '\0';
 	orig = buffer;
 
-	if (buffer[count-1] == '\n')
+	if (buffer[count-1] == '\n') {
 		buffer[count-1] = '\0';
+	}
 
 	cmd = strsep(&buffer, " ");
 	name = strsep(&buffer, " ");
 
-	if (!cmd || !name) {
-		ret = -EINVAL;
-		goto out;
-	}
 	spin_lock_irqsave(&node_lock, flags);
-
-	if (!strcmp(cmd, "-add")) {
-		if (current_index < MAX_PROCESSES_ENTRY) {
-			entry = add_process_entry(name);
-			if (!entry) {
-				printk(KERN_ERR "Failed to add process: %s\n", name);
-				goto unlock;
-			}
-		} else {
-			ret = -ENOSPC;
-			goto unlock;
-		}
-	} else if (!strcmp(cmd, "-del")) {
-		del_process_entry(name);
-	} else if (!strcmp(cmd, "-clear")) {
-		clear_all_process_entries();
-	} else {
-		ret = -EINVAL;
-		goto unlock;
-	}
-
-unlock:
+	ret = process_command(cmd, name, flags);
 	spin_unlock_irqrestore(&node_lock, flags);
-out:
+
 	kfree(orig);
 	return ret ?: count;
 }

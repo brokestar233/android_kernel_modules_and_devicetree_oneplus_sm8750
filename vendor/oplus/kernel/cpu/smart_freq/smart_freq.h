@@ -26,17 +26,15 @@ enum smart_freq_ipc_reason {
 	IPC_A,
 	IPC_B,
 	IPC_C,
-	IPC_D,
-	IPC_E,
 	SMART_FMAX_IPC_MAX,
 };
 
-#define IPC_PARTICIPATION	(BIT(IPC_A) | BIT(IPC_B) | BIT(IPC_C) | BIT(IPC_D) | BIT(IPC_E))
+#define IPC_PARTICIPATION	(BIT(IPC_A) | BIT(IPC_B) | BIT(IPC_C))
 
 struct smart_freq_ipc_reason_config {
-	unsigned long ipc;
-	unsigned long freq_allowed;
-	unsigned long hyst_ns;
+	unsigned int ipc;
+	unsigned int freq_allowed;
+	unsigned int hyst_ns;
 };
 
 struct smart_freq_cluster_info {
@@ -51,5 +49,6 @@ struct smart_freq_cluster_info {
 
 void smart_freq_update(unsigned int cpu, u64 time, unsigned int flags);
 unsigned int smart_freq_update_final_freq(struct cpumask *cpumask, unsigned int freq);
+void smart_freq_ceiling_free_enable(bool rescue_enable);
 
 #endif /* __SMART_FREQ_H__ */

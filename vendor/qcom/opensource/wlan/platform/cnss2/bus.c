@@ -829,3 +829,17 @@ void cnss_bus_disable_mhi_satellite_cfg(struct cnss_plat_data *plat_priv)
 		cnss_pr_dbg("Unsupported bus type: %d\n", plat_priv->bus_type);
 	}
 }
+
+void cnss_bus_notify_mhi_error(struct cnss_plat_data *plat_priv)
+{
+	if (!plat_priv)
+		return;
+
+	switch (plat_priv->bus_type) {
+	case CNSS_BUS_PCI:
+		cnss_pci_notify_mhi_error(plat_priv->bus_priv);
+		break;
+	default:
+		cnss_pr_dbg("Unsupported bus type: %d\n", plat_priv->bus_type);
+	}
+}

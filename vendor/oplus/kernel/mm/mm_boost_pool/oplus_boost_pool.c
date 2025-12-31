@@ -1100,10 +1100,17 @@ struct dynamic_boost_pool *dynamic_boost_pool_create_pack(void)
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
 	struct config_ezreclaimd *config;
+	struct config_oplus_boost_pool *boost_pool_config = NULL;
 
 	config = oplus_read_mm_config(module_name_ezreclaimd);
 	if (config)
 		ezreclaimd = config->enable;
+
+	boost_pool_config = oplus_read_mm_config(module_name_boost_pool);
+	if (boost_pool_config && !boost_pool_config->enable) {
+		pr_info("%s is disabled in config\n", module_name_boost_pool);
+		return NULL;
+	}
 #endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 
 	boost_root_dir = proc_mkdir("boost_pool", NULL);

@@ -76,6 +76,7 @@ struct lb_statistic {
 	atomic64_t newidle_runnable_ux_succ;
 	atomic64_t newidle_runnable_rt_boost_succ;
 	atomic64_t newidle_runnable_normal_rt_succ;
+	atomic64_t newidle_runnable_4pipeline_succ;
 	atomic64_t newidle_fail;
 };
 
@@ -271,6 +272,16 @@ void oplus_loadbalance_systrace_print(
 		tracing_mark_write(buf);
 	}
 }
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+static void balance_pipeline_runnable_systrace(const char *msg, long val)
+{
+	char buf[256];
+
+	snprintf(buf, sizeof(buf), "C|99999|%s|%ld\n", msg, val);
+	tracing_mark_write(buf);
+}
+#endif
 
 /******** The following code is copied from lib/plist.c. ********/
 #ifdef CONFIG_DEBUG_PLIST
@@ -3472,6 +3483,95 @@ static bool oplus_newidle_balance_pull_runnable_ux(
 	return false;
 }
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+static bool oplus_newidle_balance_pull_runnable_for_pipeline(
+			struct rq *this_rq, struct rq_flags *rf,
+			int *pulled_task, int *done)
+{
+	struct ux_sched_cputopo ux_cputopo = ux_sched_cputopo;
+	int this_cpu = cpu_of(this_rq);
+	int this_cls_id = topology_cluster_id(this_cpu);
+	int prime_cpu = nr_cpu_ids - 1;
+	struct rq *prime_rq = cpu_rq(prime_cpu);
+	struct task_struct *prime_pipeline_task;
+	struct task_struct *p;
+	struct task_struct *pull_me = NULL;
+
+	if (prime_rq->cfs.h_nr_running <= 1)
+		return false;
+
+	if (ux_cputopo.cls_nr <= 2)
+		return false;
+
+	if ((this_cls_id == 0) || (this_cls_id == ux_cputopo.cls_nr - 1))
+		return false;
+
+	prime_pipeline_task = oplus_pipeline_get_prime_task();
+	if (!prime_pipeline_task)
+		return false;
+
+	double_lock_balance(this_rq, prime_rq);
+
+	list_for_each_entry_reverse(p, &prime_rq->cfs_tasks, se.group_node) {
+		if (!cpumask_test_cpu(this_cpu, &p->cpus_mask))
+			continue;
+		if (!cpumask_test_cpu(this_cpu, p->cpus_ptr))
+			continue;
+
+		/*
+		 * skip running task.
+		 */
+		if (task_on_cpu(prime_rq, p))
+			continue;
+
+		/*
+		 * skip prime pipeline task.
+		 */
+		if (p == prime_pipeline_task)
+			continue;
+
+		pull_me = p;
+		break;
+	}
+
+	if (pull_me) {
+		/*
+		 * perform dequeue and enqueue operations.
+		 */
+		deactivate_task(prime_rq, pull_me, 0);
+		set_task_cpu(pull_me, this_cpu);
+		activate_task(this_rq, pull_me, 0);
+
+		/*
+		 * Only pull one task at a time.
+		 */
+		*pulled_task = 1;
+		*done = 1;
+
+		/*
+		 * reset the idle time stamp if we pulled any task.
+		 */
+		this_rq->idle_stamp = 0;
+
+		double_unlock_balance(this_rq, prime_rq);
+
+		if (unlikely(global_debug_enabled & DEBUG_PIPELINE)) {
+			char buf[64];
+
+			snprintf(buf, sizeof(buf), "cpu%d_pull\n", this_cpu);
+			balance_pipeline_runnable_systrace(buf, pull_me->pid);
+			balance_pipeline_runnable_systrace(buf, 0);
+		}
+
+		return true;
+	}
+
+	double_unlock_balance(this_rq, prime_rq);
+
+	return false;
+}
+#endif
+
 static bool oplus_newidle_balance_pull_task(struct rq *this_rq,
 					struct rq_flags *rf, int *pulled_task, int *done)
 {
@@ -3513,7 +3613,7 @@ static bool oplus_newidle_balance_pull_task(struct rq *this_rq,
 	}
 
 	/*
-	 * Step3: last is normal_rt
+	 * Step3: then is normal_rt
 	 * In this step we focus on the throughput of the normal_rt task.
 	 */
 	if (oplus_newidle_balance_pull_runnable_rt_normal(this_rq, rf,
@@ -3522,6 +3622,21 @@ static bool oplus_newidle_balance_pull_task(struct rq *this_rq,
 		ret = true;
 		goto out;
 	}
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+	/*
+	 * Step4: last is runnable tasks in prime cpu
+	 * In this step, we focus on runnable tasks in prime cpu,
+	 * that are waiting for the end of game pipeline thread,
+	 * but pipeline thread may run for a long time.
+	*/
+	if (oplus_newidle_balance_pull_runnable_for_pipeline(this_rq, rf,
+				pulled_task, done)) {
+		atomic64_inc(&lb_stat.newidle_runnable_4pipeline_succ);
+		ret = true;
+		goto out;
+	}
+#endif
 
 	atomic64_inc(&lb_stat.newidle_fail);
 
@@ -4239,6 +4354,8 @@ static int proc_lb_stat_read(struct seq_file *m, void *v)
 		atomic64_read(&lb_stat.newidle_runnable_ux_succ));
 	seq_printf(m, "newidle_runnable_normal_rt:           %10llu\n",
 		atomic64_read(&lb_stat.newidle_runnable_normal_rt_succ));
+	seq_printf(m, "newidle_runnable_4pipeline_succ:      %10llu\n",
+		atomic64_read(&lb_stat.newidle_runnable_4pipeline_succ));
 	seq_printf(m, "newidle_fail:                         %10llu\n",
 		atomic64_read(&lb_stat.newidle_fail));
 	seq_printf(m, "\n");

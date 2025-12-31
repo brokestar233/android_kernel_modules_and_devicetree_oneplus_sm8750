@@ -24,7 +24,7 @@ int geas_update_bwmon_params(struct bwmon_params *bwmon_data)
 	struct bw_hwmon *hw;
 	struct hwmon_node *node;
 	unsigned long flags;
-	unsigned int min_freq, max_freq, ab_scale, sec_ab_scale;
+	int min_freq, max_freq, ab_scale, sec_ab_scale, io_percent;
 
 	spin_lock_irqsave(geas_list_lock, flags);
 	list_for_each_entry(node, geas_hwmon_list, list) {
@@ -38,23 +38,25 @@ int geas_update_bwmon_params(struct bwmon_params *bwmon_data)
 				max_freq = bwmon_data->dimax;
 				ab_scale = bwmon_data->dascale;
 				sec_ab_scale = node->second_ab_scale;
+				io_percent = bwmon_data->resv[0];
 			} else if (hw->dcvs_hw == DCVS_LLCC) {
 				min_freq = bwmon_data->limin;
 				max_freq = bwmon_data->limax;
 				ab_scale = bwmon_data->lascale;
 				sec_ab_scale = bwmon_data->lasscale;
+				io_percent = bwmon_data->resv[1];
 			}
 
 			if (min_freq >= 0) {
-				min_freq = max(min_freq, node->hw_min_freq);
-				min_freq = min(min_freq, node->max_freq);
+				min_freq = max((u32)min_freq, node->hw_min_freq);
+				min_freq = min((u32)min_freq, node->max_freq);
 				node->min_freq = min_freq;
 				pr_err("%s, set node->min_freq = %u for dcvs_hw:%d", __func__, node->min_freq, hw->dcvs_hw);
 			}
 
 			if (max_freq >= 0) {
-				max_freq = max(max_freq, node->min_freq);
-				max_freq = min(max_freq, node->hw_max_freq);
+				max_freq = max((u32)max_freq, node->min_freq);
+				max_freq = min((u32)max_freq, node->hw_max_freq);
 				node->max_freq = max_freq;
 				pr_err("%s, set node->max_freq = %u for dcvs_hw:%d", __func__, node->max_freq, hw->dcvs_hw);
 			}
@@ -67,6 +69,11 @@ int geas_update_bwmon_params(struct bwmon_params *bwmon_data)
 			if (sec_ab_scale >= 0) {
 				node->second_ab_scale = sec_ab_scale;
 				pr_err("%s, set node->second_ab_scale = %u for dcvs_hw:%d", __func__, node->second_ab_scale, hw->dcvs_hw);
+			}
+
+			if (io_percent >= 0) {
+				node->io_percent = io_percent;
+				pr_err("%s, set node->io_percent = %u for dcvs_hw:%d", __func__, node->io_percent, hw->dcvs_hw);
 			}
 		}
 	}

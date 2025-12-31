@@ -288,6 +288,16 @@ static const struct check_status_err check_err_tfa9873[] = {
 	{9 + REG_BITS,  1, "Clipping"},
 };
 
+static const unsigned char tfa986x_fb_regs[] = {
+	TFA9865_SYS_CONTROL0,
+	TFA9865_SYS_CONTROL1,
+	TFA9865_SYS_CONTROL2,
+	TFA9865_CLOCK_CONTROL,
+	TFA9865_STATUS_FLAGS2,
+	TFA9865_BATTERY_VOLTAGE,
+	TFA9865_TEMPERATURE,
+};
+
 static const unsigned char fb_regs[] = {0x00, 0x01, 0x02, 0x04, 0x05, 0x11, 0x14, 0x15, 0x16};
 
 static const unsigned char valid_tfa_chip_id[] = {
@@ -353,12 +363,16 @@ static int tfa98xx_check_status_reg(struct tfa98xx *tfa98xx)
 	unsigned short status_reg_value[MAX_STATUS_REG_CHECKED_COUNT] = {0};
 
 	const struct check_status_err *ptr_err_info = NULL;
+	const unsigned char *ptr_fb_regs = NULL;
 	int err_info_size = 0;
+	int fb_reg_size = 0;
 
 	if (((tfa98xx->rev & 0xFF) == 0x65) || ((tfa98xx->rev & 0xFF) == 0x66)) {
 		reg_val = 0;
 		ptr_err_info = check_err_tfa986x;
 		err_info_size = ARRAY_SIZE(check_err_tfa986x);
+		ptr_fb_regs = tfa986x_fb_regs;
+		fb_reg_size = ARRAY_SIZE(tfa986x_fb_regs);
 
 		pr_debug("%s, %d, err_info_size = %d", __func__, __LINE__, err_info_size);
 
@@ -421,6 +435,14 @@ static int tfa98xx_check_status_reg(struct tfa98xx *tfa98xx)
 				}
 			}
 
+			if (flag == 1) {
+				SetFdBuf(info, "TFA98%X, SPK%x, ", (tfa98xx->rev & 0xFF), tfa98xx->tfa->dev_idx + 1);
+
+				for (i = 0; i < checked_reg_count; i++) {
+					SetFdBuf(info, "reg[0x%02x]=0x%04x, ", tfa98xx_check_info[info_idx].reg_checked_addr[i], status_reg_value[i]);
+				}
+			}
+
 			for (i = 0; i < err_info_size; i++) {
 				if (ptr_err_info[i].err_val == (1 & (reg_val >> ptr_err_info[i].bit))) {
 					SetFdBuf(info, "%s,", ptr_err_info[i].info);
@@ -430,10 +452,10 @@ static int tfa98xx_check_status_reg(struct tfa98xx *tfa98xx)
 			/* read other registers */
 			if (flag == 1) {
 				SetFdBuf(info, "dump regs(");
-				for (i = 0; i < sizeof(fb_regs); i++) {
-					err = tfa98xx_read_register16(tfa98xx->tfa, fb_regs[i], &reg_tmp);
+				for (i = 0; i < fb_reg_size; i++) {
+					err = tfa98xx_read_register16(tfa98xx->tfa, ptr_fb_regs[i], &reg_tmp);
 					if (Tfa98xx_Error_Ok == err) {
-						SetFdBuf(info, "%x=0x%04x,", fb_regs[i], reg_tmp);
+						SetFdBuf(info, "%x=0x%04x,", ptr_fb_regs[i], reg_tmp);
 					} else {
 						break;
 					}
@@ -551,7 +573,7 @@ static int tfa98xx_set_check_feedback(struct snd_kcontrol *kcontrol,
 		break;
 	}
 
-	pr_info("%s: set value = %d, tfa_fb.chk_flag = 0x%x\n", __func__, val, tfa_fb.chk_flag);
+	pr_debug("%s: set value = %d, tfa_fb.chk_flag = 0x%x\n", __func__, val, tfa_fb.chk_flag);
 	return 1;
 }
 

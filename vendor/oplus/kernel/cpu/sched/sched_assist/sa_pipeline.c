@@ -183,6 +183,11 @@ bool oplus_is_pipeline_scene(void)
 }
 EXPORT_SYMBOL_GPL(oplus_is_pipeline_scene);
 
+struct task_struct *oplus_pipeline_get_prime_task(void)
+{
+	return prime_task;
+}
+
 static void systrace_c_printk(const char *msg, long val)
 {
 	char buf[256];

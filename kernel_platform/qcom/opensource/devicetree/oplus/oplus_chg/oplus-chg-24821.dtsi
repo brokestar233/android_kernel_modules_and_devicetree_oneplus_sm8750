@@ -418,6 +418,7 @@
 				OPLUS_IC_FUNC_GAUGE_GET_DEC_CV_SOH
 				OPLUS_IC_FUNC_GAUGE_SET_VCT
 				OPLUS_IC_FUNC_GAUGE_GET_VCT
+				OPLUS_IC_FUNC_GAUGE_GET_BATT_SOC_CENTI
 			>;
 			virqs = <
 				OPLUS_IC_VIRQ_ERR
@@ -584,9 +585,6 @@
 
 		oplus_spec,sw_check_full_cnt = <12>;
 
-		oplus,smooth_switch;
-		oplus,reserve_chg_soc = <2>;
-
 		oplus,ui_soc_2_voltage_comp_mv = <30>;
 		oplus,chg_shutdown_max_mv = <3000>;
 
@@ -601,6 +599,18 @@
 		oplus_spec,current_limit_of_drop_soc_2 = <700>;
 		oplus_spec,volt_of_fast_drop_soc_1 = <2900>;
 		oplus_spec,support_uisoc_low_battery_control;
+
+		oplus_spec,batt_full_time = <60>;
+		oplus_spec,batt_full_low_soc = <99>;
+		oplus_spec,batt_full_low_soc_time = <600>;
+		oplus_spec,smooth_strategy_name = "bs";
+		smooth_strategy {
+			oplus_spec,reserve_table_centipercent =
+				/* start(%) end(%) dischg_reserve(0.01%) full_reserve(0.01%) chg_reserve(0.01%) chg_split(%) */
+				<0   20  0   0   200 100>,
+				<21  99  200 0   200 100>,
+				<100 100 200 0   200 100>;
+		};
 	};
 
 	oplus_vooc: oplus,vooc {

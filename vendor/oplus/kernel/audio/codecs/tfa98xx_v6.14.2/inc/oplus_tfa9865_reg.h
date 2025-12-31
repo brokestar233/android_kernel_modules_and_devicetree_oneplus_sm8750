@@ -1,5 +1,5 @@
 /******************************************************************************
-** File: - oplus_tfa98xx_feedback.h
+** File: - oplus_tfa9865_reg.h
 **
 ** Copyright (C), 2022-2024, OPLUS Mobile Comm Corp., Ltd
 **
@@ -13,6 +13,16 @@
 
 #ifndef OPLUS_TFA9865_REG_H
 #define OPLUS_TFA9865_REG_H
+
+#define TFA9865_SYS_CONTROL0		0x00
+#define TFA9865_SYS_CONTROL1		0x01
+#define TFA9865_SYS_CONTROL2		0x02
+#define TFA9865_CLOCK_CONTROL		0x04
+#define TFA9865_STATUS_FLAGS0		0x10
+#define TFA9865_STATUS_FLAGS1		0x11
+#define TFA9865_STATUS_FLAGS2		0x12
+#define TFA9865_BATTERY_VOLTAGE		0x15
+#define TFA9865_TEMPERATURE			0x16
 
 /* TFA9865_STATUS_FLAGS0 */
 /* Over Temperature */

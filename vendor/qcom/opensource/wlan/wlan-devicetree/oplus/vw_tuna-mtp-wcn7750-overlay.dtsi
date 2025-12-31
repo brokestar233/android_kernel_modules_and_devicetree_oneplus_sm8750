@@ -10,15 +10,18 @@
 	oplus_bdf: oplus_bdf {
 		bdf_name = "bdwlan.elf";
 		project_type = "operator";
+		region_type = "operator";
 	};
 };
 
 &oplus_bdf {
     operator_2: operator_2 {
 		bdf_name = "bdwlan.b0i";
+		region_name = "IN";
     };
 
     operator_3: operator_3 {
 		bdf_name = "bdwlan.b0e";
+		region_name = "EU";
     };
 };

@@ -23,4 +23,6 @@
 		bits = <0 0>;
 	};
 };
-
+&gcc {
+qcom,critical-devices = <&qupv3_se4_i2c>;
+};

@@ -22,15 +22,20 @@
 #include <linux/sysctl.h>
 #include <linux/bitops.h>
 #include "smart_freq.h"
+#include <linux/sysfs.h>
+#include <linux/errno.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+
 
 #define CREATE_TRACE_POINTS
 #include "smart_freq_trace.h"
 
-#define MAX_CLUSTERS 4
+#define MAX_CLUSTERS 3
 #define MAX_NAMELEN 16
 #define MAX_FREQ  2147483647
 #define CPUFREQ_SMART_FREQ_BIT BIT(26)
-
+#define MAX_BUF_SIZE 256
 
 DEFINE_PER_CPU(u64, intr_cnt);
 DEFINE_PER_CPU(u64, cycle_cnt);
@@ -43,13 +48,16 @@ DEFINE_PER_CPU(bool, tickless_mode);
 
 static bool smart_freq_init_done;
 static unsigned int smart_freq_enable = 0;
+static unsigned int smart_freq_debug_enable = 0;
+static bool is_sbe_rescue;
 __read_mostly int num_smart_freq_clusters;
+static DEFINE_MUTEX(freq_reason_mutex);
+
 
 /* Common config for 3 cluster system */
 static struct smart_freq_cluster_info smart_freq_info[MAX_CLUSTERS];
-unsigned int sysctl_ipc_freq_levels_cluster0[SMART_FMAX_IPC_MAX];
-unsigned int sysctl_ipc_freq_levels_cluster1[SMART_FMAX_IPC_MAX];
-unsigned int sysctl_ipc_freq_levels_cluster2[SMART_FMAX_IPC_MAX];
+static char sysctl_ipc_freq_levels_cluster1[MAX_BUF_SIZE] = "200:2700000,300:2147483647,500:2147483647";
+static char sysctl_ipc_freq_levels_cluster2[MAX_BUF_SIZE] = "200:2750000,300:2147483647,500:2147483647";
 
 static int arch_get_nr_clusters(void)
 {
@@ -66,6 +74,24 @@ static int arch_get_nr_clusters(void)
 	}
 	__arch_nr_clusters = max_id + 1;
 	return __arch_nr_clusters;
+}
+
+void smart_freq_ceiling_free_enable(bool rescue_enable)
+{
+	if (!smart_freq_init_done || !smart_freq_enable)
+		return;
+
+	if (is_sbe_rescue == rescue_enable)
+		return;
+
+	is_sbe_rescue = rescue_enable;
+}
+EXPORT_SYMBOL(smart_freq_ceiling_free_enable);
+
+noinline int tracing_mark_write(const char *buf)
+{
+	trace_printk(buf);
+	return 0;
 }
 
 static void arch_get_cluster_cpus(struct cpumask *cpus, int cluster_id)
@@ -109,7 +135,6 @@ static unsigned int get_cluster_ipc_level_freq(int curr_cpu, u64 time)
 	}
 
 	smart_freq_info[cluster_id].cluster_ipc_level = index;
-
 	trace_ipc_freq(cluster_id, winning_cpu, index,
 		smart_freq_info[cluster_id].ipc_reason_config[index].freq_allowed,
 		time, per_cpu(ipc_deactivate_ns, winning_cpu), curr_cpu,
@@ -125,11 +150,13 @@ void smart_freq_update(unsigned int cpu, u64 time, unsigned int flags)
 	if (!smart_freq_init_done || !smart_freq_enable)
 		return;
 
-	if ((flags & CPUFREQ_SMART_FREQ_BIT)) {
-		cluster_id = topology_cluster_id(cpu);
+	cluster_id = topology_cluster_id(cpu);
+	if (flags & CPUFREQ_SMART_FREQ_BIT)
 		smart_freq_info[cluster_id].cluster_freq =
 				get_cluster_ipc_level_freq(cpu, time);
-	}
+
+	if (is_sbe_rescue)
+		smart_freq_info[cluster_id].cluster_freq = MAX_FREQ;
 }
 EXPORT_SYMBOL(smart_freq_update);
 
@@ -145,7 +172,10 @@ unsigned int smart_freq_update_final_freq(struct cpumask *cpumask, unsigned int 
 	if (cluster_id == 0)
 		return freq;
 
-	max_freq = smart_freq_info[cluster_id].cluster_freq;
+	if (is_sbe_rescue)
+		max_freq = MAX_FREQ;
+	else
+		max_freq = smart_freq_info[cluster_id].cluster_freq;
 
 	return freq > max_freq ? max_freq : freq;
 }
@@ -167,7 +197,7 @@ static unsigned long smart_freq_calculate_ipc(int cpu, int cluster_id)
 	per_cpu(intr_cnt, cpu) = amu_cnt;
 	delta_intr = amu_cnt - prev_intr_cnt;
 
-	if (prev_cycl_cnt)
+	if (prev_cycl_cnt > 0 && delta_cycl > 0)
 		ipc = (delta_intr * 100) / delta_cycl;
 
 	per_cpu(ipc_cnt, cpu) = ipc;
@@ -229,6 +259,12 @@ static void smart_freq_sched_tick(void *data, struct rq *rq)
 		}
 
 		if (inform_governor) {
+			if (smart_freq_debug_enable && (per_cpu(ipc_level, cpu) != curr_ipc_level)) {
+				char buf[256];
+
+				snprintf(buf, sizeof(buf), "C|9999|Cpu%d_ipc_level|%lu\n", cpu, ipc);
+				tracing_mark_write(buf);
+			}
 			per_cpu(ipc_level, cpu) = curr_ipc_level;
 			per_cpu(ipc_deactivate_ns, cpu) = 0;
 			cpufreq_update_util(cpu_rq(cpu), CPUFREQ_SMART_FREQ_BIT);
@@ -236,85 +272,76 @@ static void smart_freq_sched_tick(void *data, struct rq *rq)
 	}
 }
 
-struct ctl_table smart_freq_enable_table[] = {
-	{
-		.procname	= "enable",
-		.data		= &smart_freq_enable,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
-		.extra1		= SYSCTL_ZERO,
-		.extra2		= SYSCTL_ONE,
-	},
-	{ }
-};
-
-
-static char reason_dump[1024];
-static DEFINE_MUTEX(freq_reason_mutex);
-static int sched_smart_freq_ipc_dump_handler(struct ctl_table *table, int write,
-			void __user *buffer, size_t *lenp,
-			loff_t *ppos)
+static int sched_smart_freq_to_string(int cluster_id, char *buf, size_t size)
 {
-	int ret = -EINVAL, pos = 0, i, j;
+	int len = 0;
+	int i = 0;
+	for (i = 0; i < SMART_FMAX_IPC_MAX; i++) {
+		int ipc  = smart_freq_info[cluster_id].ipc_reason_config[i].ipc;
+		int freq = smart_freq_info[cluster_id].ipc_reason_config[i].freq_allowed;
+		int n = snprintf(buf + len, size - len, "%d:%d", ipc, freq);
+		if (n >= size - len)
+			return -ENOSPC;
 
-	if (!smart_freq_init_done)
-		return -EINVAL;
-
-	mutex_lock(&freq_reason_mutex);
-
-	for (j = 0; j < num_smart_freq_clusters; j++) {
-		for (i = 0; i < SMART_FMAX_IPC_MAX; i++) {
-			pos += snprintf(reason_dump + pos, 50, "%d:%d:%lu:%lu:%lu:%d\n", j, i,
-				smart_freq_info[j].ipc_reason_config[i].ipc,
-				smart_freq_info[j].ipc_reason_config[i].freq_allowed,
-				smart_freq_info[j].ipc_reason_config[i].hyst_ns,
-					!!(smart_freq_info[j].smart_freq_ipc_participation_mask &
-					BIT(i)));
+		len += n;
+		if (i < SMART_FMAX_IPC_MAX - 1) {
+			if (len + 1 >= size)
+				return -ENOSPC;
+			buf[len++] = ',';
 		}
 	}
+	buf[len] = '\0';
 
-	ret = proc_dostring(table, write, buffer, lenp, ppos);
-	mutex_unlock(&freq_reason_mutex);
-
-	return ret;
+	return 0;
 }
 
-static int sched_smart_freq_ipc_handler(struct ctl_table *table, int write,
-		void __user *buffer, size_t *lenp,
-			loff_t *ppos)
+static int sched_smart_freq_parse_store(int cluster_id, char *str)
 {
-	int ret;
+	char *token, *tmp, *buf;
+	unsigned int ipc, freq;
+	int count = 0;
+
+	buf = kstrdup(str, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	tmp = buf;
+	mutex_lock(&freq_reason_mutex);
+	while ((token = strsep(&tmp, ",")) != NULL) {
+		if (sscanf(token, "%u:%u", &ipc, &freq) == 2) {
+			smart_freq_info[cluster_id].ipc_reason_config[count].ipc = ipc;
+			smart_freq_info[cluster_id].ipc_reason_config[count].freq_allowed = freq;
+
+			count++;
+			if (count >= SMART_FMAX_IPC_MAX)
+				goto done;
+		}
+
+	}
+done:
+	mutex_unlock(&freq_reason_mutex);
+	kfree(buf);
+	return 0;
+}
+
+
+static int sched_smart_freq_ipc_handler(struct ctl_table *table, int write,
+			void __user *buffer, size_t *lenp,
+			long long *ppos)
+{
+	int ret = 0;
 	int cluster_id = -1;
-	unsigned long no_reason_freq;
-	int i;
-	unsigned int *data = (unsigned int *)table->data;
-	int val[SMART_FMAX_IPC_MAX];
-	struct ctl_table tmp = {
-		.data   = &val,
-		.maxlen = sizeof(int) * SMART_FMAX_IPC_MAX,
-		.mode   = table->mode,
-	};
+	char *temp;
+	char *data = (char *)table->data;
+	struct ctl_table local_table = *table;
 
 	if (!smart_freq_init_done)
 		return -EINVAL;
 
-	mutex_lock(&freq_reason_mutex);
+	temp = kzalloc(MAX_BUF_SIZE, GFP_KERNEL);
+	if (!temp)
+		return -ENOMEM;
 
-	if (!write) {
-		tmp.data = table->data;
-		ret = proc_dointvec(&tmp, write, buffer, lenp, ppos);
-		goto unlock;
-	}
-
-	ret = proc_dointvec(&tmp, write, buffer, lenp, ppos);
-	if (ret)
-		goto unlock;
-
-	ret = -EINVAL;
-
-	if (data == &sysctl_ipc_freq_levels_cluster0[0])
-		cluster_id = 0;
 	if (data == &sysctl_ipc_freq_levels_cluster1[0])
 		cluster_id = 1;
 	if (data == &sysctl_ipc_freq_levels_cluster2[0])
@@ -323,85 +350,71 @@ static int sched_smart_freq_ipc_handler(struct ctl_table *table, int write,
 	if (cluster_id == -1)
 		goto unlock;
 
-	if (val[0] < 0)
+	if (!write) {
+		ret = sched_smart_freq_to_string(cluster_id, temp, MAX_BUF_SIZE);
+		if (ret)
+			goto unlock;
+
+		local_table.data   = temp;
+		local_table.maxlen = strlen(temp);
+		ret = proc_dostring(&local_table, 0, buffer, lenp, ppos);
+		goto unlock;
+	}
+
+	local_table.data = temp;
+	local_table.maxlen = MAX_BUF_SIZE - 1;
+	ret = proc_dostring(&local_table, write, buffer, lenp, ppos);
+	if (ret)
+		goto unlock;
+	temp[MAX_BUF_SIZE - 1] = '\0';
+	ret = sched_smart_freq_parse_store(cluster_id, temp);
+	if (ret)
 		goto unlock;
 
-	no_reason_freq = val[0];
-
-	/* Make sure all reasons freq are larger than NO_REASON */
-	/* IPC/freq should be in increasing order */
-	for (i = 1; i < SMART_FMAX_IPC_MAX; i++) {
-		if (val[i] < val[i-1])
-			goto unlock;
-	}
-
-	for (i = 0; i < SMART_FMAX_IPC_MAX; i++) {
-		smart_freq_info[cluster_id].ipc_reason_config[i].freq_allowed = val[i];
-		data[i] = val[i];
-	}
-	ret = 0;
-
 unlock:
-	mutex_unlock(&freq_reason_mutex);
+	kfree(temp);
 	return ret;
 }
 
-static struct ctl_table smart_freq_cluster0[] = {
+struct ctl_table smart_freq_table[] = {
 	{
-		.procname	= "ipc_freq_levels",
-		.data		= &sysctl_ipc_freq_levels_cluster0,
-		.maxlen		= SMART_FMAX_IPC_MAX * sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= sched_smart_freq_ipc_handler,
+		.procname   = "enable",
+		.data       = &smart_freq_enable,
+		.maxlen     = sizeof(unsigned int),
+		.mode       = 0644,
+		.proc_handler   = proc_dointvec,
+		.extra1     = SYSCTL_ZERO,
+		.extra2     = SYSCTL_ONE,
 	},
 	{
-		.procname	= "sched_smart_freq_dump_ipc_reason",
-		.data		= &reason_dump,
-		.maxlen		= 1024 * sizeof(char),
-		.mode		= 0444,
-		.proc_handler	= sched_smart_freq_ipc_dump_handler,
-	},
-};
-
-static struct ctl_table smart_freq_cluster1[] = {
-	{
-		.procname	= "ipc_freq_levels",
-		.data		= &sysctl_ipc_freq_levels_cluster1,
-		.maxlen		= SMART_FMAX_IPC_MAX * sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= sched_smart_freq_ipc_handler,
+		.procname   = "debug_enable",
+		.data       = &smart_freq_debug_enable,
+		.maxlen     = sizeof(unsigned int),
+		.mode       = 0644,
+		.proc_handler   = proc_dointvec,
+		.extra1     = SYSCTL_ZERO,
+		.extra2     = SYSCTL_ONE,
 	},
 	{
-		.procname	= "sched_smart_freq_dump_ipc_reason",
-		.data		= &reason_dump,
-		.maxlen		= 1024 * sizeof(char),
-		.mode		= 0444,
-		.proc_handler	= sched_smart_freq_ipc_dump_handler,
-	},
-};
-
-static struct ctl_table smart_freq_cluster2[] = {
-	{
-		.procname	= "ipc_freq_levels",
-		.data		= &sysctl_ipc_freq_levels_cluster2,
-		.maxlen		= SMART_FMAX_IPC_MAX * sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= sched_smart_freq_ipc_handler,
+		.procname   = "ipc_freq_levels_cluster1",
+		.data       = &sysctl_ipc_freq_levels_cluster1,
+		.maxlen     = MAX_BUF_SIZE,
+		.mode       = 0644,
+		.proc_handler   = sched_smart_freq_ipc_handler,
 	},
 	{
-		.procname	= "sched_smart_freq_dump_ipc_reason",
-		.data		= &reason_dump,
-		.maxlen		= 1024 * sizeof(char),
-		.mode		= 0444,
-		.proc_handler	= sched_smart_freq_ipc_dump_handler,
-	},
+		.procname   = "ipc_freq_levels_cluster2",
+		.data       = &sysctl_ipc_freq_levels_cluster2,
+		.maxlen     = MAX_BUF_SIZE,
+		.mode       = 0644,
+		.proc_handler   = sched_smart_freq_ipc_handler,
+	}
 };
 
 static void smart_ipc_init_mt6899(void)
 {
 	unsigned int cluster_id = 0;
 	struct cpumask cluster_cpus;
-	struct ctl_table_header *hdr3 = NULL;
 
 	for (cluster_id = 0; cluster_id < num_smart_freq_clusters; cluster_id++) {
 		arch_get_cluster_cpus(&cluster_cpus, cluster_id);
@@ -413,45 +426,41 @@ static void smart_ipc_init_mt6899(void)
 			/* IPC */
 			smart_freq_info[cluster_id].smart_freq_ipc_participation_mask = 0;
 			smart_freq_info[cluster_id].ipc_reason_config[0].ipc = 300;
+			smart_freq_info[cluster_id].ipc_reason_config[0].freq_allowed = MAX_FREQ;
 			smart_freq_info[cluster_id].min_cycles = 5806080;
-			smart_freq_info[cluster_id].cluster_freq = 2147483647;
-			hdr3 = register_sysctl("smart_freq/cluster0",
-				smart_freq_cluster0);
-			kmemleak_not_leak(hdr3);
+			smart_freq_info[cluster_id].cluster_freq = MAX_FREQ;
 		} else if (cluster_id == 1) {
 			/* IPC */
-			smart_freq_info[cluster_id].smart_freq_ipc_participation_mask = BIT(IPC_A) | BIT(IPC_B);
+			smart_freq_info[cluster_id].smart_freq_ipc_participation_mask = BIT(IPC_A) | BIT(IPC_B) | BIT(IPC_C);
 			smart_freq_info[cluster_id].ipc_reason_config[0].ipc = 300;
 			smart_freq_info[cluster_id].ipc_reason_config[0].freq_allowed = 2600000;
 			smart_freq_info[cluster_id].ipc_reason_config[1].ipc = 500;
-			smart_freq_info[cluster_id].ipc_reason_config[1].freq_allowed = 2147483647;
+			smart_freq_info[cluster_id].ipc_reason_config[1].freq_allowed = MAX_FREQ;
+			smart_freq_info[cluster_id].ipc_reason_config[2].ipc = 800;
+			smart_freq_info[cluster_id].ipc_reason_config[2].freq_allowed = MAX_FREQ;
 			smart_freq_info[cluster_id].min_cycles = 5806080;
-			smart_freq_info[cluster_id].cluster_freq = 2147483647;
-			hdr3 = register_sysctl("smart_freq/cluster1",
-				smart_freq_cluster1);
-			kmemleak_not_leak(hdr3);
+			smart_freq_info[cluster_id].cluster_freq = MAX_FREQ;
 		} else if (cluster_id == 2) {
 			/* IPC */
-			smart_freq_info[cluster_id].smart_freq_ipc_participation_mask = BIT(IPC_A) | BIT(IPC_B);
+			smart_freq_info[cluster_id].smart_freq_ipc_participation_mask = BIT(IPC_A) | BIT(IPC_B) | BIT(IPC_C);
 			smart_freq_info[cluster_id].ipc_reason_config[0].ipc = 300;
 			smart_freq_info[cluster_id].ipc_reason_config[0].freq_allowed = 2500000;
 			smart_freq_info[cluster_id].ipc_reason_config[1].ipc = 500;
-			smart_freq_info[cluster_id].ipc_reason_config[1].freq_allowed = 2147483647;
+			smart_freq_info[cluster_id].ipc_reason_config[1].freq_allowed = MAX_FREQ;
+			smart_freq_info[cluster_id].ipc_reason_config[2].ipc = 800;
+			smart_freq_info[cluster_id].ipc_reason_config[2].freq_allowed = MAX_FREQ;
 			smart_freq_info[cluster_id].min_cycles = 5806080;
-			smart_freq_info[cluster_id].cluster_freq = 2147483647;
-			hdr3 = register_sysctl("smart_freq/cluster2",
-				smart_freq_cluster2);
-			kmemleak_not_leak(hdr3);
+			smart_freq_info[cluster_id].cluster_freq = MAX_FREQ;
 		}
 	}
 }
 
+struct ctl_table_header *hdr;
 static int __init smart_freq_init(void)
 {
 	int ret = -1;
 	struct device_node *np;
 	const char *soc_id = NULL;
-	struct ctl_table_header *hdr = NULL;
 
 	num_smart_freq_clusters = arch_get_nr_clusters();
 	if (num_smart_freq_clusters <= 0)
@@ -463,9 +472,10 @@ static int __init smart_freq_init(void)
 		return ret;
 
 	if (!strcmp(soc_id, "MT6899")) {
-		hdr = register_sysctl("smart_freq", smart_freq_enable_table);
+		hdr = register_sysctl("smart_freq", smart_freq_table);
+		if (!hdr)
+			return -ENOMEM;
 		smart_ipc_init_mt6899();
-		kmemleak_not_leak(hdr);
 	} else {
 		return 0;
 	}
@@ -488,6 +498,7 @@ static void __exit smart_freq_exit(void)
 		return;
 
 	unregister_trace_android_vh_scheduler_tick(smart_freq_sched_tick, NULL);
+	unregister_sysctl_table(hdr);
 }
 
 module_init(smart_freq_init);

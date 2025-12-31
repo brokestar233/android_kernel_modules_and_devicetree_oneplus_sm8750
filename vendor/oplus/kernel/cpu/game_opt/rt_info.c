@@ -33,6 +33,11 @@ static DEFINE_RAW_SPINLOCK(rt_info_lock);
 static DEFINE_RWLOCK(rt_info_sorted_rwlock);
 atomic_t have_valid_render_pid = ATOMIC_INIT(0);
 
+static void update_critical_task_pids(void);
+static pid_t critical_task_pids[CRITICAL_TASK_NUM] = {-1, -1};
+extern void update_ctb_pids(pid_t game_tgid, pid_t unitymain_pid, pid_t unitygfxdevice_pid);
+extern void get_critical_task_name(char *unityMain_name, char *unityGfxDevice_name);
+
 static inline bool same_rt_thread_group(struct task_struct *waker,
 	struct task_struct *wakee)
 {
@@ -347,9 +352,11 @@ static ssize_t rt_info_proc_write(struct file *file, const char __user *buf,
 	if (ret <= 0)
 		return ret;
 
-	atomic_set(&have_valid_render_pid, 0);
-
 	raw_spin_lock_irqsave(&rt_info_lock, flags);
+
+	update_critical_task_pids();
+
+	atomic_set(&have_valid_render_pid, 0);
 
 	for (i = 0; i < rt_num; i++) {
 		if (related_threads[i].task)
@@ -516,28 +523,75 @@ int get_critical_task_by_name(const char *name, struct task_struct **task)
 	return 0;
 }
 
-int get_critical_task_state(const char *name, pid_t pid)
+/*
+ * Check if a thread matches the critical task name.
+ */
+static bool is_matching_thread(const char *task_name, int name_len,
+								const char *thread_name, pid_t *last_pid,
+								pid_t current_pid)
 {
-	int state = -1;
-	int name_len, i;
-	unsigned long flags;
+	if (strncmp(task_name, thread_name, name_len) != 0)
+		return false;
 
-	name_len = check_task_name(name);
+	if (*last_pid != -1 && *last_pid == current_pid)
+		return false;
 
-	if (name_len < 0)
-		return -1;
+	*last_pid = current_pid;
+	return true;
+}
 
-	raw_spin_lock_irqsave(&rt_info_lock, flags);
-	for (i = 0; i < total_num; i++) {
-		if (strncmp(name, related_threads[i].task->comm, name_len) == 0) {
-			if (related_threads[i].pid == pid) {
-				state = task_is_running(related_threads[i].task) ? 0 : 1;
-			}
-			break;
-		}
+static pid_t find_critical_task_pid(const char *task_name, int name_len,
+	  									int local_total_num, pid_t *last_pid)
+{
+	int j;
+	char thread_name[TASK_COMM_LEN];
+
+	for (j = 0; j < local_total_num; j++) {
+		if (!related_threads[j].task ||
+				!get_task_name(related_threads[j].pid,
+								related_threads[j].task,
+								thread_name))
+		continue;
+
+	if (is_matching_thread(task_name, name_len, thread_name,
+							last_pid, related_threads[j].pid))
+		return *last_pid;
 	}
-	raw_spin_unlock_irqrestore(&rt_info_lock, flags);
-	return state;
+
+	return -1;
+}
+
+/*
+ * Update critical task PIDs by searching in related_threads.
+ * Note: Caller must hold rt_info_lock.
+ */
+static void update_critical_task_pids(void)
+{
+	int name_len, i;
+	char critical_task[CRITICAL_TASK_NUM][100] = {0};
+	int local_total_num;
+	pid_t last_pid = -1;
+
+	if (!get_ctb_enable() && !get_htb_enable())
+		return;
+
+	get_critical_task_name(critical_task[0], critical_task[1]);
+	local_total_num = total_num;
+
+	for (i = CRITICAL_TASK_NUM - 1; i >= 0; i--) {
+		critical_task_pids[i] = -1;
+
+		name_len = check_task_name(critical_task[i]);
+		if (name_len < 0)
+			continue;
+
+		critical_task_pids[i] = find_critical_task_pid(critical_task[i],
+														name_len,
+														local_total_num,
+														&last_pid);
+	}
+
+	update_ctb_pids(game_tgid, critical_task_pids[0], critical_task_pids[1]);
 }
 
 int rt_info_init(void)

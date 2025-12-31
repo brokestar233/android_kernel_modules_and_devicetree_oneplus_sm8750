@@ -74,13 +74,14 @@ static int handler_pre_cgroup_procs_write(struct kprobe *p, struct pt_regs *regs
 {
 	struct task_struct *task = NULL;
 	pid_t pid;
+	char *buf = NULL;
 
 	if(!atomic_read(&cgroup_hook_enabled)) {
 		pr_info("cgroup_hook_enabled = 0,return\n");
 		return 0;
 	}
 
-	char *buf = (char *)regs->regs[1];
+	buf = (char *)regs->regs[1];
 
 	if (kstrtoint(strstrip(buf), 0, &pid) || pid < 0)
 		return -EINVAL;
@@ -105,6 +106,7 @@ out_unlock:
 }
 
 static int register_cgroup_kprobe(void) {
+	int ret = 0;
 	if (atomic_cmpxchg(&is_kprobe_registered, 0, 1) != 0) {
 		pr_info(KP_FREEZE_DETECT_LOG_TAG "cgroup_kprobe already registered\n");
 		return -EBUSY;
@@ -113,7 +115,7 @@ static int register_cgroup_kprobe(void) {
 	kp_cgroup_write.pre_handler = handler_pre_cgroup_procs_write;
 	kp_cgroup_write.symbol_name = "cgroup_procs_write";
 
-	int ret = register_kprobe(&kp_cgroup_write);
+	ret = register_kprobe(&kp_cgroup_write);
 	if (ret < 0) {
 		pr_info(KP_FREEZE_DETECT_LOG_TAG "register cgroup_kprobe failed: %d\n", ret);
 		atomic_set(&is_kprobe_registered, 0);

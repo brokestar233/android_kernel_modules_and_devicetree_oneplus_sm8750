@@ -162,8 +162,14 @@ static int frame_cnt_interval_store(const char *buf, const struct kernel_param *
 	return 0;
 }
 
+static int frame_cnt_interval_show(char *buf, const struct kernel_param *kp)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", frame_cnt_interval);
+}
+
 static const struct kernel_param_ops frame_cnt_interval_ops = {
 	.set = frame_cnt_interval_store,
+	.get = frame_cnt_interval_show,
 };
 module_param_cb(frame_cnt_interval, &frame_cnt_interval_ops, NULL, 0664);
 
@@ -1100,8 +1106,14 @@ static int osml_frame_store(const char *buf, const struct kernel_param *kp)
 	return 0;
 }
 
+static int osml_frame_show(char *buf, const struct kernel_param *kp)
+{
+	return snprintf(buf, PAGE_SIZE, "%u,%u,%u\n", atomic_read(&frame_owner), atomic_read(&frame_duration), atomic_read(&vsync_period));
+}
+
 static const struct kernel_param_ops osml_frame_ops = {
 	.set = osml_frame_store,
+	.get = osml_frame_show,
 };
 module_param_cb(frame_duration, &osml_frame_ops, NULL, 0664);
 

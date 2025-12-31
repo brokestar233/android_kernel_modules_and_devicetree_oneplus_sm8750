@@ -813,6 +813,7 @@
 			qcom,glink-label = "lpass";
 
 			qcom,adsp_qrtr {
+				qcom,ch-sched-rt;
 				qcom,glink-channels = "IPCRTR";
 				qcom,net-id = <2>;
 				qcom,intents = <0x800  5
