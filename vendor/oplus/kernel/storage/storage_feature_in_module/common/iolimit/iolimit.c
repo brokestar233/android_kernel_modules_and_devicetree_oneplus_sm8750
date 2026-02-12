@@ -32,7 +32,7 @@
 #include <trace/hooks/mm.h>
 
 #define CREATE_TRACE_POINTS
-#include "trace.h"
+#include "iolimit_trace.h"
 
 //IO control's window is selected as (1/8)s.
 #define WAIT_PARTS_NUM		(8)

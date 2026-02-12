@@ -86,6 +86,7 @@
 #include <linux/workqueue.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
+#include <linux/string.h>
 #endif /* OPLUS_FEATURE_CONN_POWER_MONITOR */
 
 /**
@@ -3533,6 +3534,19 @@ static void wma_wake_event_log_reason(t_wma_handle *wma,
 		    wma_nofl_info("Reporting WOW wakeup to framework: LOCAL_DATA_UC_DROP (%d)",wake_info->wake_reason);
 		    char event_msg[256] = {'\0'};
 		    snprintf(event_msg, sizeof(event_msg), "wakeup_mgmt=%s", wma_wow_wake_reason_str(wake_info->wake_reason));
+		    /* Report to framework via uevent */
+		    oplusLpmSendUevent(event_msg);
+		}
+		/* Special handling for unknown wakeup reason */
+		//add for 10533952 unknown type connectivity power monitor
+		const char *wake_reason_str = wma_wow_wake_reason_str(wake_info->wake_reason);
+		if (wake_reason_str == NULL) {
+		    wake_reason_str = "unknown";
+		}
+		if (strcmp(wake_reason_str, "unknown") == 0) {
+		    wma_nofl_info("Reporting WOW wakeup to framework: unknown (%d)", wake_info->wake_reason);
+		    char event_msg[256] = {0};
+		    snprintf(event_msg, sizeof(event_msg), "wakeup_mgmt=%s", wake_reason_str);
 		    /* Report to framework via uevent */
 		    oplusLpmSendUevent(event_msg);
 		}

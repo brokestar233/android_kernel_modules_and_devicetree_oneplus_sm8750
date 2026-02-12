@@ -1124,6 +1124,10 @@ static inline void tp_touch_handle(struct touchpanel_data *ts)
 				}
 
 				input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
+				if (CHK_BIT(ts->irq_slot, (1 << i))) {
+					TP_INFO(ts->tp_index, "touch point id %d up.\n", i);
+					CLR_BIT(ts->irq_slot, (1 << i));
+				}
 			}
 		}
 
@@ -2461,6 +2465,7 @@ static int init_parse_dts(struct device *dev, struct touchpanel_data *ts)
 	ts->lpwg_fw_support = of_property_read_bool(np, "lpwg_fw_support");
 	ts->tp_scene_para_switch_support = of_property_read_bool(np, "tp_scene_para_switch_support");
 	ts->fp_unlock_status_support = of_property_read_bool(np, "fp_unlock_status_support");
+	ts->idle_freq_support = of_property_read_bool(np, "idle_freq_support");
 
 #ifdef CONFIG_TOUCHPANEL_TRUSTED_TOUCH
 	ts->trusted_touch_support = of_property_read_bool(np, "trusted_touch_support");

@@ -144,7 +144,6 @@ def define_oplus_local_modules():
         ]),
         conditional_srcs = {
             "CONFIG_OPLUS_DDK_MTK": {
-                True:  ["mtk/mtk_shutdown_reboot/mtk_force_shutdown.c"],
                 False: ["qcom/force_shutdown/force_shutdown.c"],
             }
         },
@@ -158,7 +157,6 @@ def define_oplus_local_modules():
         ]),
         conditional_srcs = {
             "CONFIG_OPLUS_DDK_MTK": {
-                True:  ["mtk/oplus_pmic_monitor_mtk/oplus_pmic_info_get_mtk.c","mtk/oplus_pmic_monitor_mtk/main.c"],
                 False: ["qcom/qcom_pmic_monitor/oplus_pmic_info_smem.c",
 			"qcom/qcom_pmic_monitor/main.c",
 			"qcom/qcom_pmic_monitor/oplus_pmic_machine_state.c",

@@ -47,6 +47,7 @@
 #define CSIPHY_VERSION_V230_PAGANI_FRONT         0xF23D
 #define CSIPHY_VERSION_V230_PAGANI_MAIN          0xF23E
 #define CSIPHY_VERSION_V230_KTM_MAIN             0xF240
+#define CSIPHY_VERSION_V221_VW_MAIN              0xF244
 #endif
 
 /**

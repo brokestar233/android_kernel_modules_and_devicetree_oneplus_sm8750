@@ -919,6 +919,12 @@ static int oplus_ofp_panel_cmd_set_nolock(void *dsi_panel, enum dsi_cmd_set_type
 			oplus_display_panel_set_global_hbm_status(GLOBAL_HBM_DISABLE);
 		}
 
+		if (p_oplus_ofp_params->aod_unlocking) {
+			p_oplus_ofp_params->aod_unlocking = false;
+			OFP_INFO("oplus_ofp_aod_unlocking:%d\n", p_oplus_ofp_params->aod_unlocking);
+			OPLUS_OFP_TRACE_INT("oplus_ofp_aod_unlocking", p_oplus_ofp_params->aod_unlocking);
+		}
+
 		/* recovery backlight level */
 		OPLUS_OFP_TRACE_BEGIN("dsi_panel_set_backlight");
 		rc = dsi_panel_set_backlight(panel, panel->bl_config.bl_level);
@@ -3336,7 +3342,17 @@ int oplus_ofp_aod_off_handle(void *dsi_display)
 			|| !display->panel->panel_initialized) {
 		OFP_INFO("Dont set backlight when panel already power off");
 	} else {
-		dsi_panel_set_backlight(display->panel, display->panel->bl_config.bl_level);
+		if (oplus_ofp_video_mode_30hz_aod_is_enabled()) {
+			rc = oplus_ofp_panel_cmd_set_nolock(display->panel, DSI_CMD_DEFAULT_SWITCH_PAGE);
+			if (rc) {
+				OFP_ERR("[%s] failed to send DSI_CMD_DEFAULT_SWITCH_PAGE, rc=%d\n", display->name, rc);
+			}
+			display->panel->oplus_panel.aod_backlight_async = true;
+			dsi_panel_set_backlight(display->panel, display->panel->bl_config.bl_level);
+			display->panel->oplus_panel.aod_backlight_async = false;
+		} else {
+			dsi_panel_set_backlight(display->panel, display->panel->bl_config.bl_level);
+		}
 	}
 	mutex_unlock(&display->panel->panel_lock);
 
@@ -3446,8 +3462,7 @@ int oplus_ofp_power_mode_handle(void *dsi_display, int power_mode)
 			}
 
 			refresh_rate = display->panel->cur_mode->timing.refresh_rate;
-			if ((!oplus_ofp_video_mode_30hz_aod_is_enabled()
-					|| (oplus_ofp_video_mode_30hz_aod_is_enabled() && (refresh_rate == 30)))
+			if ((!oplus_ofp_video_mode_30hz_aod_is_enabled())
 						&& !((p_oplus_ofp_params->longrui_aod_config & OPLUS_OFP_FULL_SCREEN_AOD_CONFIG)
 							&& (p_oplus_ofp_params->longrui_aod_mode & OPLUS_OFP_FULL_SCREEN_AOD_MODE))) {
 				/* whether need to wait for TE before AOD on */

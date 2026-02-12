@@ -180,8 +180,11 @@ struct msm_cvp_inst *msm_cvp_open(int session_type, struct task_struct *task)
 
 		return NULL;
 	}
-
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	inst = kvzalloc(sizeof(*inst), GFP_KERNEL);
+#else
 	inst = kzalloc(sizeof(*inst), GFP_KERNEL);
+#endif
 	if (!inst) {
 		dprintk(CVP_ERR, "Failed to allocate memory\n");
 		rc = -ENOMEM;
@@ -262,7 +265,11 @@ fail_init:
 	DEINIT_MSM_CVP_LIST(&inst->cvpwnccbufs);
 	DEINIT_MSM_CVP_LIST(&inst->frames);
 
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	kvfree(inst);
+#else
 	kfree(inst);
+#endif
 	inst = NULL;
 err_invalid_core:
 	return inst;
@@ -456,7 +463,11 @@ int msm_cvp_destroy(struct msm_cvp_inst *inst)
 			atomic_read(&inst->smem_count));
 		core->smem_leak_count += atomic_read(&inst->smem_count);
 	}
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	kvfree(inst);
+#else
 	kfree(inst);
+#endif
 	inst = NULL;
 	dprintk(CVP_SESS,
 		"sys-stat: nr_insts %d msgs %d, frames %d, bufs %d, smems %d\n",

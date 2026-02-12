@@ -34,6 +34,8 @@
 
 		oplus,target_vbus_mv = <11000>;
 		oplus,curr_max_ma = <5000>;
+		oplus,curr_max_ma_percent = <3500 /* 75% ibus */
+					    2000 /* 85% ibus */>;
 
 		oplus,pps_warm_allow_vol = <4000>;
 		oplus,pps_warm_allow_soc = <55>;
@@ -62,6 +64,44 @@
 
 		oplus,plc_strategy-data = <&cp_2t1_simple_strategy>;
 		oplus,plc_strategy-names = "default";
+
+		pps_third_lcf_strategy {
+			oplus,temp_type = <OPLUS_STRATEGY_USE_SHELL_TEMP>;
+			oplus,temp_range = <0 50 120 160 210 380 440>;
+
+			strategy_temp_range_curves {
+				strategy_temp_range_t0 =	<190 4530 0
+								 165 4520 0
+								 140 4510 0
+								 115 4500 0
+								 90 4490 1>;
+				strategy_temp_range_t1 =	<500 4570 0
+								 465 4565 0
+								 430 4550 0
+								 395 4540 0
+								 360 4530 1>;
+				strategy_temp_range_t2 =	<550 4570 0
+								 505 4565 0
+								 460 4550 0
+								 415 4540 0
+								 370 4530 1>;
+				strategy_temp_range_t3 =	<600 4570 0
+								 555 4565 0
+								 510 4550 0
+								 465 4540 0
+								 420 4530 1>;
+				strategy_temp_range_t4 =	<900 4570 0
+								 850 4565 0
+								 750 4550 0
+								 650 4540 0
+								 500 4530 1>;
+				strategy_temp_range_t5 =	<1600 4564 0
+								 1450 4558 0
+								 1300 4535 0
+								 1150 4535 0
+								 1000 4510 1>;
+			};
+		};
 
 		pps_charge_third_strategy {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_SHELL_TEMP>;

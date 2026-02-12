@@ -339,7 +339,7 @@ error:
 
 #ifdef OPLUS_FEATURE_DISPLAY
 	if (!rc) {
-		if (oplus_display_ops.panel_set_backlight_post) {
+		if (oplus_display_ops.panel_set_backlight_post && oplus_display_ops.get_aod_state && !oplus_display_ops.get_aod_state()) {
 			oplus_display_ops.panel_set_backlight_post(panel, bl_temp);
 		}
 	}

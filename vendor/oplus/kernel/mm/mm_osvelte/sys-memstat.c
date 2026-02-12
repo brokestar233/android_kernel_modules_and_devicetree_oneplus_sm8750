@@ -106,6 +106,8 @@ static void extra_meminfo_proc_show(void *data, struct seq_file *m)
 #endif
 	show_val_kb(m, "GPUTotalUsed:   ",
 			read_mtrack_mem_usage(MTRACK_GPU, MTRACK_GPU_TOTAL));
+	show_val_kb(m, "ZramCompr:      ",
+			read_mtrack_mem_usage(MTRACK_ZRAM, MTRACK_ZRAM_COMPR_BYTES) >> PAGE_SHIFT);
 }
 
 int sys_memstat_init(struct proc_dir_entry *root)

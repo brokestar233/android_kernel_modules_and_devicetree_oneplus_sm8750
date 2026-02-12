@@ -28,13 +28,16 @@
 #include <linux/signal.h>
 #include <generated/utsrelease.h>
 #include <trace/events/vmscan.h>
+#include <trace/hooks/signal.h>
 
 #include "../../../mm/slab.h"
 
 #include "common.h"
+#include "internal.h"
 #include "memstat.h"
 #include "sys-memstat.h"
 #include "lowmem-dbg.h"
+#include "mm-utils.h"
 
 static struct list_head *debug_slab_caches;
 static struct mutex *debug_slab_mutex;
@@ -51,13 +54,15 @@ struct files_acct {
 };
 
 struct lowmem_dbg_cfg {
-	u64 interval;
+	u32 interval;
+	u32 lmkd_interval;
 	u64 last_jiffies;
 	u64 watermark_low;
 	u64 watermark_slab;
 	u64 watermark_dmabuf;
 	u64 watermark_gpu;
 	u64 watermark_other;
+	struct kobject *kobj;
 };
 static struct lowmem_dbg_cfg g_cfg;
 
@@ -463,9 +468,7 @@ static void __lowmem_dbg_dump(struct lowmem_dbg_cfg *cfg)
 	unsigned long file, active_file, inactive_file, shmem;
 	unsigned long vmalloc, pgtbl, kernel_stack, kernel_misc_reclaimable;
 	unsigned long dmabuf, dmabuf_pool, gpu, unaccounted;
-#ifdef CONFIG_CONT_PTE_HUGEPAGE
-	unsigned long chp_pool_cma, chp_pool_buddy, anon_huge;
-#endif /* CONFIG_CONT_PTE_HUGEPAGE */
+	unsigned long zram_origin, zram_comp, zram_memused, zram_samepages;
 	struct sysinfo si;
 	struct files_acct files_acct;
 
@@ -500,14 +503,14 @@ static void __lowmem_dbg_dump(struct lowmem_dbg_cfg *cfg)
 	dmabuf_pool = read_mtrack_mem_usage(MTRACK_DMABUF, MTRACK_DMABUF_POOL);
 	gpu = read_mtrack_mem_usage(MTRACK_GPU, MTRACK_GPU_TOTAL);
 
-#ifdef CONFIG_CONT_PTE_HUGEPAGE
-	chp_pool_cma = sys_chp_pool_cma();
-	chp_pool_buddy = sys_chp_pool_buddy();
-	anon_huge = sys_anon_huge();
-#endif
+	zram_origin = read_mtrack_mem_usage(MTRACK_ZRAM, MTRACK_ZRAM_ORIG);
+	zram_comp = read_mtrack_mem_usage(MTRACK_ZRAM, MTRACK_ZRAM_COMPR_BYTES);
+	zram_memused = read_mtrack_mem_usage(MTRACK_ZRAM, MTRACK_ZRAM_MEMUSED);
+	zram_samepages = read_mtrack_mem_usage(MTRACK_ZRAM, MTRACK_ZRAM_SAMEPAGES);
+
 	unaccounted = tot - free - slab_reclaimable - slab_unreclaimable -
 		vmalloc - anon - file - pgtbl - kernel_stack - dmabuf -
-		gpu - kernel_misc_reclaimable;
+		gpu - kernel_misc_reclaimable - zram_memused;
 
 	osvelte_info("lowmem_dbg start osvelte v%d.%d.%d based on %s<<<<<<<\n",
 		     OSVELTE_MAJOR, OSVELTE_MINOR, OSVELTE_PATCH_NUM, UTS_RELEASE);
@@ -527,12 +530,10 @@ static void __lowmem_dbg_dump(struct lowmem_dbg_cfg *cfg)
 		     K(file), K(active_file), K(inactive_file), K(shmem));
 	osvelte_info("vmalloc: %lu page_tables: %lu kernel_stack: %lu kernel_misc_reclaimable: %lu\n",
 		     K(vmalloc), K(pgtbl), K(kernel_stack), K(kernel_misc_reclaimable));
+	osvelte_info("zram_orig: %lu zram_comp: %lu zram_memused: %lu zram_samepages: %lu\n",
+		     K(zram_origin), zram_comp >> 10, K(zram_memused), K(zram_samepages));
 	osvelte_info("dmabuf: %lu dmabuf_pool: %lu gpu: %lu unaccounted: %lu\n",
 		     K(dmabuf), K(dmabuf_pool), K(gpu), K(unaccounted));
-#ifdef CONFIG_CONT_PTE_HUGEPAGE
-	osvelte_info("anon_huge: %lu chp_pool_cma: %lu chp_pool_buddy: %lu",
-		     K(anon_huge), K(chp_pool_cma), K(chp_pool_buddy));
-#endif /* CONFIG_CONT_PTE_HUGEPAGE */
 
 	dump_procs(true);
 	dump_slab_info(slab_unreclaimable > cfg->watermark_slab);
@@ -556,29 +557,38 @@ static void lowmem_dbg_dump(struct work_struct *work)
 	__lowmem_dbg_dump(&g_cfg);
 }
 
-void direct_reclaim_vh(void *data, int order, gfp_t gfp_flags)
+enum dump_mode {
+	DM_LMKD,
+	DM_LOWMEM,
+};
+
+static void try_to_lowmem_dbg_dump(enum dump_mode mode)
 {
-	struct lowmem_dbg_cfg *cfg = &g_cfg;
-	static atomic_t atomic_lmk = ATOMIC_INIT(0);
 	long free;
 	unsigned long file;
-	u64 now;
+	struct lowmem_dbg_cfg *cfg = &g_cfg;
+	static atomic_t atomic_lmk = ATOMIC_INIT(0);
+	u64 now = get_jiffies_64();
 
 	if (atomic_inc_return(&atomic_lmk) > 1)
 		goto done;
 
-	now = get_jiffies_64();
-	if (time_before64(now, (cfg->last_jiffies + cfg->interval)))
-		goto done;
+	if (mode == DM_LOWMEM) {
+		if (time_before64(now, (cfg->last_jiffies + cfg->interval)))
+			goto done;
 
-	free = sys_freeram() - sys_free_cma();
-	/* do this really occur ? */
-	if (free < 0)
-		free = 0;
+		free = sys_freeram() - sys_free_cma();
+		/* do this really occur ? */
+		if (free < 0)
+			free = 0;
 
-	file = sys_inactive_file() + sys_active_file();
-	if (free + file > cfg->watermark_low)
-		goto done;
+		file = sys_inactive_file() + sys_active_file();
+		if (free + file > cfg->watermark_low)
+			goto done;
+	} else if (mode == DM_LMKD) {
+		if (time_before64(now, (cfg->last_jiffies + cfg->lmkd_interval)))
+			goto done;
+	}
 
 	cfg->last_jiffies = now;
 	schedule_work(&lowmem_dbg_work);
@@ -586,8 +596,39 @@ done:
 	atomic_dec(&atomic_lmk);
 }
 
-static ssize_t dump_lowmem_dbg_show(struct kobject *kobj,
-				    struct kobj_attribute *attr, char *buf)
+void direct_reclaim_vh(void *data, int order, gfp_t gfp_flags)
+{
+	try_to_lowmem_dbg_dump(DM_LOWMEM);
+}
+
+/******************************************************************************
+ *                          lmkd utility
+ ******************************************************************************/
+static void android_vh_do_send_sig_info(void *data, int sig, struct task_struct *killer,
+					struct task_struct *dst)
+{
+	short oom_score_adj = -1001;
+
+	/* lmkd is an RT task, lmkd_reaper is normal taks. */
+	if (!rt_task(killer->group_leader) ||
+	    strncmp(current->group_leader->comm, "lmkd", 4) != 0)
+		return;
+
+	oom_score_adj = dst->signal->oom_score_adj;
+	mm_logi_tag("osvelte_lmkd", "kill '%s' (%d), uid %d, oom_score_adj %d\n",
+		    dst->comm, dst->tgid, from_kuid(&init_user_ns, task_uid(dst)),
+		    oom_score_adj);
+
+	if (oom_score_adj <= 200)
+		try_to_lowmem_dbg_dump(DM_LMKD);
+}
+
+/******************************************************************************
+ *                          sysfs interface
+ ******************************************************************************/
+
+static ssize_t dump_show(struct kobject *kobj, struct kobj_attribute *attr,
+			 char *buf)
 {
 	struct lowmem_dbg_cfg cfg = {
 		.watermark_slab = 0,
@@ -597,15 +638,70 @@ static ssize_t dump_lowmem_dbg_show(struct kobject *kobj,
 	};
 	ssize_t size = 0;
 
+	/* debug only. this might concurrent with lowmem_dbg_dump() */
 	__lowmem_dbg_dump(&cfg);
 	size = sysfs_emit_at(buf, 0, "dump lowmem dbg info to kernel log\n");
 	return size;
 }
 
-static struct kobj_attribute dump_lowmem_dbg_attr = __ATTR_RO(dump_lowmem_dbg);
+static ssize_t config_store(struct kobject *kobj, struct kobj_attribute *attr,
+			    const char *buf, size_t count)
+{
+	u64 val;
+	char config[32];
+	struct lowmem_dbg_cfg *cfg = &g_cfg;
+
+	if (sscanf(buf, "%s %llu", config, &val) != 2)
+		return -EINVAL;
+
+	if (strncmp(config, "lmkd_interval", 13) == 0)
+		cfg->lmkd_interval = val * HZ;
+	else if (strncmp(config, "interval", 13) == 0)
+		cfg->lmkd_interval = val * HZ;
+	else if (strncmp(config, "wm_low", 6) == 0)
+		cfg->watermark_low = val * PAGES(SZ_1M);
+	else if (strncmp(config, "wm_dmabuf", 9) == 0)
+		cfg->watermark_dmabuf = val * PAGES(SZ_1M);
+	else if (strncmp(config, "wm_slab", 7) == 0)
+		cfg->watermark_slab = val * PAGES(SZ_1M);
+	else
+		return -EINVAL;
+
+	osvelte_logi("set %s to %llu\n", config, val);
+	return count;
+}
+
+static ssize_t stats_show(struct kobject *kobj, struct kobj_attribute *attr,
+			  char *buf)
+{
+	int size = 0;
+	struct lowmem_dbg_cfg *cfg = &g_cfg;
+
+	size += sysfs_emit_at(buf, size, "interval: %u\n",
+			      cfg->interval);
+	size += sysfs_emit_at(buf, size, "lmkd_interval: %u\n",
+			      cfg->lmkd_interval);
+	size += sysfs_emit_at(buf, size, "wm_low: %llu\n",
+			      cfg->watermark_low);
+	size += sysfs_emit_at(buf, size, "wm_slab: %llu\n",
+			      cfg->watermark_slab);
+	size += sysfs_emit_at(buf, size, "wm_dmabuf: %llu\n",
+			      cfg->watermark_dmabuf);
+	size += sysfs_emit_at(buf, size, "wm_gpu: %llu\n",
+			      cfg->watermark_gpu);
+	size += sysfs_emit_at(buf, size, "wm_other: %llu\n",
+			      cfg->watermark_other);
+	return size;
+}
+
+static struct kobj_attribute dump_attr = __ATTR_RO(dump);
+static struct kobj_attribute stats_attr = __ATTR_RO(stats);
+static struct kobj_attribute config_attr = __ATTR_WO(config);
 
 static struct attribute *attrs[] = {
-	&dump_lowmem_dbg_attr.attr,
+	&dump_attr.attr,
+	&stats_attr.attr,
+	&config_attr.attr,
 	NULL,
 };
 
@@ -617,6 +713,7 @@ int osvelte_lowmem_dbg_init(struct kobject *root)
 {
 	struct lowmem_dbg_cfg *cfg = &g_cfg;
 	unsigned long total_ram = sys_totalram();
+	int err;
 
 	/* lookup symbols for slab */
 	debug_slab_mutex = osvelte_kallsyms_lookup_name("slab_mutex");
@@ -626,8 +723,13 @@ int osvelte_lowmem_dbg_init(struct kobject *root)
 		pr_err("register lowmem-dbg vendor hook failed\n");
 		return -EINVAL;
 	}
+	if (register_trace_android_vh_do_send_sig_info(android_vh_do_send_sig_info, NULL)) {
+		pr_err("register android_vh_do_send_sig_info failed\n");
+		return -EINVAL;
+	}
 
 	cfg->interval = 10 * HZ;
+	cfg->lmkd_interval = 2 * HZ;
 	if (total_ram >= PAGES(SZ_4G + SZ_8G))
 		cfg->watermark_low = PAGES(SZ_1G + SZ_512M);
 	else if (total_ram >= PAGES(SZ_4G + SZ_4G))
@@ -648,10 +750,19 @@ int osvelte_lowmem_dbg_init(struct kobject *root)
 	cfg->watermark_gpu = PAGES(SZ_2G + SZ_512M);
 	cfg->watermark_other = PAGES(SZ_1G);
 
-	if (sysfs_create_group(root, &attr_group))
-		osvelte_loge("create sysfs lowmemdbg attr failed\n");
-	osvelte_logi("interval: %llu watermark low: %llu dmabuf: %llu\n",
-		     cfg->interval, cfg->watermark_low, cfg->watermark_dmabuf);
+	cfg->kobj = kobject_create_and_add("lowmem_dbg", root);
+	if (!cfg->kobj) {
+		osvelte_loge("failed to create sysfs common_kobj\n");
+		/* ignore error here */
+		return 0;
+	}
+	err = sysfs_create_group(cfg->kobj, &attr_group);
+	if (err) {
+		osvelte_loge("failed to create sysfs common group\n");
+		kobject_put(cfg->kobj);
+		return -ENOMEM;
+	}
+	osvelte_logi("+\n");
 	return 0;
 }
 

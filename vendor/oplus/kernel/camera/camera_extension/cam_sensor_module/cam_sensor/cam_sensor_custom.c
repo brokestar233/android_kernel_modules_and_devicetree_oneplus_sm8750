@@ -240,7 +240,7 @@ int cam_ext_sensor_start_thread(void *arg)
 
 	if (s_ctrl->sensor_init_setting.reg_setting != NULL)
 	{
-		kfree(s_ctrl->sensor_init_setting.reg_setting);
+		vfree(s_ctrl->sensor_init_setting.reg_setting);
 		s_ctrl->sensor_init_setting.reg_setting = NULL;
 	}
 	mutex_unlock(&(s_ctrl->cam_sensor_mutex));
@@ -273,8 +273,8 @@ int cam_ext_sensor_start(struct cam_sensor_ctrl_t *s_ctrl, void *arg)
 		CAM_EXT_ERR(CAM_EXT_SENSOR, "initsettings copy_to_user failed ");
 	}
 
-	reg_setting = (struct cam_sensor_i2c_reg_array *)kmalloc(
-		(sizeof(struct cam_sensor_i2c_reg_array) * initsettings->size), GFP_KERNEL);
+	reg_setting = (struct cam_sensor_i2c_reg_array *)vzalloc(
+		(sizeof(struct cam_sensor_i2c_reg_array) * initsettings->size));
 	if (reg_setting == NULL)
 	{
 		CAM_EXT_ERR(CAM_EXT_SENSOR, "failed to allocate initsettings memory!!!!");
@@ -324,7 +324,7 @@ int cam_ext_sensor_start(struct cam_sensor_ctrl_t *s_ctrl, void *arg)
 			CAM_EXT_ERR(CAM_EXT_SENSOR, "create sensor start thread failed");
 			if (reg_setting != NULL)
 			{
-				kfree(reg_setting);
+				vfree(reg_setting);
 				reg_setting = NULL;
 			}
 			rc = -1;

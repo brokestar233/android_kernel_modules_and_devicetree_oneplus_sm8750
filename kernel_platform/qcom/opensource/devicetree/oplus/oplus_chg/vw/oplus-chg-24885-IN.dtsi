@@ -11,3 +11,11 @@
 				       CHG_PROTOCOL_PPS
 				       CHG_PROTOCOL_VOOC>;
 };
+
+&oplus_virtual_gauge {
+	oplus,batt_capacity_mah = <9000>;
+};
+
+&oplus_vooc {
+	oplus,smart_chg_bcc_support;
+};

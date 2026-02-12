@@ -31,6 +31,7 @@ struct oplus_display_ops {
 		struct mipi_dsi_device *dsi, u32 bl_lvl);
 	void (*backlight_setup_pre)(struct backlight_properties *props, struct dsi_display *display);
 	void (*backlight_setup_post)(struct dsi_display *display);
+	bool (*get_aod_state)(void);
 
 	/* commit */
 	void (*encoder_kickoff)(struct drm_encoder *drm_enc, struct sde_encoder_virt *sde_enc);

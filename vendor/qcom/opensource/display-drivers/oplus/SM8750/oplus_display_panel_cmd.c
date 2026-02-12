@@ -46,6 +46,11 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-lp1-command",
 	"qcom,mdss-dsi-lp2-command",
 	"qcom,mdss-dsi-nolp-command",
+	"qcom,mdss-dsi-nolp-60hz-command",
+	"qcom,mdss-dsi-nolp-90hz-command",
+	"qcom,mdss-dsi-nolp-120hz-command",
+	"qcom,mdss-dsi-nolp-144hz-command",
+	"qcom,mdss-dsi-nolp-165hz-command",
 	"PPS not parsed from DTSI, generated dynamically",
 	"ROI not parsed from DTSI, generated dynamically",
 	"qcom,mdss-dsi-timing-switch-command",
@@ -323,6 +328,11 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-lp1-command-state",
 	"qcom,mdss-dsi-lp2-command-state",
 	"qcom,mdss-dsi-nolp-command-state",
+	"qcom,mdss-dsi-nolp-60hz-command-state",
+	"qcom,mdss-dsi-nolp-90hz-command-state",
+	"qcom,mdss-dsi-nolp-120hz-command-state",
+	"qcom,mdss-dsi-nolp-144hz-command-state",
+	"qcom,mdss-dsi-nolp-165hz-command-state",
 	"PPS not parsed from DTSI, generated dynamically",
 	"ROI not parsed from DTSI, generated dynamically",
 	"qcom,mdss-dsi-timing-switch-command-state",
@@ -796,6 +806,36 @@ int oplus_panel_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set_type *type)
 	return 0;
 }
 
+int oplus_panel_video_mode_aod_off_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set_type *type)
+{
+	unsigned int refresh_rate = 0;
+
+	if (!panel->oplus_panel.ramless_aod_mode_cmd_switch_support) {
+		OPLUS_DSI_DEBUG("video mode 30hz aod not enabled, no need to update aod type\n");
+		return 0;
+	}
+
+	OPLUS_DSI_TRACE_BEGIN("oplus_panel_video_mode_aod_off_cmd_switch");
+
+	refresh_rate = panel->cur_mode->timing.refresh_rate;
+	if (*type == DSI_CMD_SET_NOLP) {
+		if (refresh_rate == 60) {
+			*type = DSI_CMD_SET_NOLP_60HZ;
+		} else if (refresh_rate == 90) {
+			*type = DSI_CMD_SET_NOLP_90HZ;
+		} else if (refresh_rate == 120) {
+			*type = DSI_CMD_SET_NOLP_120HZ;
+		} else if (refresh_rate == 144) {
+			*type = DSI_CMD_SET_NOLP_144HZ;
+		} else if (refresh_rate == 165) {
+			*type = DSI_CMD_SET_NOLP_165HZ;
+		}
+	}
+
+	OPLUS_DSI_TRACE_END("oplus_panel_video_mode_aod_off_cmd_switch");
+	return 0;
+}
+
 int oplus_display_send_dcs_lock(struct dsi_display *display,
 		enum dsi_cmd_set_type type)
 {
@@ -1157,6 +1197,7 @@ int oplus_panel_vid_cmdp_handle(void *dsi_panel, enum dsi_cmd_set_type type)
 	switch (type) {
 	case DSI_CMD_SET_ON:
 	case DSI_CMD_SET_OFF:
+	case DSI_CMD_SET_LP1:
 	case DSI_CMD_ESD_SWITCH_PAGE:
 	case DSI_CMD_DEFAULT_SWITCH_PAGE:
 	case DSI_CMD_SET_PPS:
@@ -1170,6 +1211,11 @@ int oplus_panel_vid_cmdp_handle(void *dsi_panel, enum dsi_cmd_set_type type)
 	case DSI_CMD_FPS_ENTER_165HZ:
 	case DSI_CMD_FPS_144HZ_ENTER_165HZ:
 	case DSI_CMD_FPS_ENTER_144HZ:
+	case DSI_CMD_LOADING_EFFECT_MODE1:
+	case DSI_CMD_LOADING_EFFECT_MODE2:
+	case DSI_CMD_LOADING_EFFECT_OFF:
+		dsi_cmd_set_type_status = 0;
+		panel->oplus_panel.dsi_cmd_need_to_package = false;
 		break;
 	default:
 		if (count > 0) {

@@ -318,6 +318,8 @@ struct oplus_panel {
 	bool ofp_configuration_enable_for_ili7838e;
 
 	bool doze_disable_esdcheck;
+	/* add for aod mode cmd switch */
+	bool ramless_aod_mode_cmd_switch_support;
 };
 
 #endif /* _OPLUS_PANEL_H_ */

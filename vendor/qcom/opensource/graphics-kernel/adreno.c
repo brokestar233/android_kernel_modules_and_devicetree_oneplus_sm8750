@@ -1489,6 +1489,9 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_dev->perfcounter = false;
 
+	/* dcvs_boost is enabled by default in the kernel platform */
+	adreno_dev->dcvs_boost = true;
+
 	adreno_sysfs_init(adreno_dev);
 
 	/* Ignore return value, as driver can still function without pwrscale enabled */

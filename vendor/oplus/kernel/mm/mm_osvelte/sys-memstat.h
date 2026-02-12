@@ -9,23 +9,29 @@
 #include <linux/mmzone.h>
 #include <linux/vmalloc.h>
 #include <linux/proc_fs.h>
-#ifdef CONFIG_CONT_PTE_HUGEPAGE
-#include "../../../mm/chp_ext.h"
-#endif /* CONFIG_CONT_PTE_HUGEPAGE */
 
 enum mtrack_type {
 	MTRACK_ASHMEM,
 	MTRACK_DMABUF,
 	MTRACK_GPU,
+	MTRACK_ZRAM,
 	MTRACK_MAX
 };
 
 enum mtrack_subtype {
+	/* dmabuf */
 	MTRACK_DMABUF_SYSTEM_HEAP,
 	MTRACK_DMABUF_POOL,
 	MTRACK_DMABUF_BOOST_POOL,
+	/* GPU */
 	MTRACK_GPU_TOTAL,
 	MTRACK_GPU_PROC_KERNEL,
+	/* zram */
+	MTRACK_ZRAM_ORIG,
+	MTRACK_ZRAM_COMPR_BYTES,
+	MTRACK_ZRAM_MEMUSED,
+	MTRACK_ZRAM_SAMEPAGES,
+	/* end */
 	MTRACK_SUBTYPE_MAX
 };
 
@@ -33,6 +39,7 @@ static const char * const mtrack_text[MTRACK_MAX] = {
 	"ashmem",
 	"dma_buf",
 	"gpu",
+	"zram",
 };
 
 struct mtrack_debugger {
@@ -120,18 +127,6 @@ static inline unsigned long sys_sharedram(void)
 {
 	return global_node_page_state(NR_SHMEM);
 }
-
-#ifdef CONFIG_CONT_PTE_HUGEPAGE
-static inline unsigned long sys_chp_pool_cma(void)
-{
-	return chp_read_info_ext(CHP_EXT_CMD_POOL_CMA_COUNT) * HPAGE_CONT_PTE_NR;
-}
-
-static inline unsigned long sys_chp_pool_buddy(void)
-{
-	return chp_read_info_ext(CHP_EXT_CMD_POOL_BUDDY_COUNT) * HPAGE_CONT_PTE_NR;
-}
-#endif
 
 static inline unsigned long sys_free_cma(void)
 {

@@ -4576,6 +4576,18 @@ static int fts_tp_probe(struct spi_device *spi)
 
 	spi->mode = SPI_MODE_0;
 	spi->bits_per_word = 8;
+
+#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	spi->cs_setup.value = 1;
+	spi->cs_setup.unit = 0;
+	spi->cs_hold.value = 1;
+	spi->cs_hold.unit = 0;
+	spi->cs_inactive.value = 1;
+	spi->cs_inactive.unit = 0;
+#endif /* end of LINUX_VERSION_CODE*/
+#endif
+
 	ret = spi_setup(spi);
 	if (ret) {
 		TPD_INFO("spi setup fail");

@@ -1166,8 +1166,12 @@ static long hbp_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigne
 		break;
 	case HBP_IOCTRL_FP_GRIP_STATUS:
 		if (hbp_dev->fp_grip_support) {
-			hbp_dev->fp_grip_enable = !!usr.val;
-			hbp_info("%s finger hold\n", (hbp_dev->fp_grip_enable & 1) > 0 ? "enable" : "disable");
+			if (usr.val == FP_GRIP_DISABLE_TIMEOUT || usr.val == FP_GRIP_DISABLE) {
+				hbp_dev->fp_grip_enable = FP_GRIP_DISABLE;
+			} else {
+				hbp_dev->fp_grip_enable = FP_GRIP_ENABLE;
+			}
+			hbp_info("transfer girp of fp pass state %s\n", hbp_dev->fp_grip_enable > 0 ? "enable" : "disable");
 		}
 		break;
 	default:

@@ -1399,7 +1399,7 @@ static ssize_t proc_aiunit_game_info_read(struct file *file, char __user *buffer
 
 	} else {
 		get_num = ts->aiunit_game_get_num;
-		if (get_num > 0 && ts->noise_level > 0) {
+		if (get_num > 0 && ts->aiunit_game_enable) {
 			for(num = 0; num < get_num; num++) {
 				if (count > strlen(page)) {
 					snprintf(&page[0] + strlen(page), MAX_AIINFO_SIZE - strlen(page),
@@ -1466,7 +1466,11 @@ static ssize_t proc_set_idle_freq_mode_write(struct file *file,
 
 	mutex_lock(&ts->mutex);
 	if (ts->game_switch_support) {
-		ts->ts_ops->set_idle_freq_mode(value);
+		if (ts->ts_ops->set_idle_freq_mode) {
+			ts->ts_ops->set_idle_freq_mode(value);
+		} else {
+			TS_TP_INFO("%s:not support set_idle_freq_mode\n", __func__);
+		}
 	}
 	mutex_unlock(&ts->mutex);
 
@@ -5792,7 +5796,7 @@ int init_touchpanel_proc_part3(struct touchpanel_data *ts, struct proc_dir_entry
 			"glove_mode_enable", 0666, NULL, &proc_glove_mode, ts, false,
 			ts->glove_mode_v2_support
 		},
-		{"set_idle_freq_mode", 0666, NULL, &proc_set_idle_freq_mode_ops, ts, false, true},
+		{"set_idle_freq_mode", 0666, NULL, &proc_set_idle_freq_mode_ops, ts, false, ts->idle_freq_support},
 		{
 			"pocket_prevent_mode", 0666, NULL, &proc_pocket_prevent_mode, ts, false, ts->glove_mode_v2_support
 		},

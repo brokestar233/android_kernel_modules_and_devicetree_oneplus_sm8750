@@ -375,6 +375,10 @@ int oplus_panel_parse_features_config(struct dsi_panel *panel)
 	OPLUS_DSI_INFO("oplus,doze_disable_esdcheck: %s\n",
 		panel->oplus_panel.doze_disable_esdcheck ? "true" : "false");
 
+	panel->oplus_panel.ramless_aod_mode_cmd_switch_support = utils->read_bool(utils->data,
+			"oplus,ramless_aod_mode_cmd_switch_support");
+	OPLUS_DSI_INFO("oplus,ramless_aod_mode_cmd_switch_support: %s\n",
+			panel->oplus_panel.ramless_aod_mode_cmd_switch_support ? "true" : "false");
 
 	return 0;
 }

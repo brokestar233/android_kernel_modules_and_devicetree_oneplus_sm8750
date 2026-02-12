@@ -289,6 +289,7 @@ int oplus_display_set_power(struct drm_connector *connector,
 			oplus_ofp_power_mode_handle(display, power_mode);
 		}
 #endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
+        oplus_panel_event_data_notifier_trigger(display->panel, DRM_PANEL_EVENT_BLANK_LP, power_mode, true);
 		break;
 
 	case SDE_MODE_DPMS_ON:
@@ -1733,11 +1734,6 @@ void oplus_panel_frame_delay(struct dsi_panel *panel, u32 per_frame_us, u32 fram
 		OPLUS_DSI_ERR("invalid encoder params\n");
 		return;
 	}
-
-	/* add 700us to vsync width(first half of frame time) to
-	 * 1. avoid command sent in the middle of TE cycle
-	 * 2. compensate the TE shift period */
-	frame_delay_us += 700;
 
 	last_te_timestamp = panel->oplus_panel.te_timestamp;
 	duration = ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp));

@@ -2934,6 +2934,10 @@ static int detect_i2c_slave(sipa_dev_t *si_pa)
 		return -EINVAL;
 	}
 
+	if (IS_SIPA_RST_KEEP_HIGH(si_pa->chip_type)) {
+		return 0;
+	}
+
 	sipa_set_rst(si_pa, SIA81XX_DISABLE_LEVEL);
 	return 0;
 }

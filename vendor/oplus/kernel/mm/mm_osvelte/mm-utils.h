@@ -25,20 +25,26 @@ static inline char mm_loglvl_to_char(int l)
 	return '?';
 }
 
-#define mm_log(l, f, ...) do {						\
+#define mm_log(l, t, f, ...) do {					\
 	if (l >= MM_LOG_LVL) 						\
 		printk(KERN_ERR "%s %5d %5d %c %-16s: %s:%d "f,		\
-		       MM_LOG_TAG, current->tgid, current->pid,		\
+		       t, current->tgid, current->pid,			\
 		       mm_loglvl_to_char(l), current->comm, __func__,	\
 		       __LINE__,  ##__VA_ARGS__);			\
 } while (0)
 
 #define mm_loge(f, ...)							\
-	mm_log(MM_LOG_ERR, f, ##__VA_ARGS__)
-
+	mm_log(MM_LOG_ERR, MM_LOG_TAG, f, ##__VA_ARGS__)
 #define mm_logi(f, ...)							\
-	mm_log(MM_LOG_INFO, f, ##__VA_ARGS__)
-
+	mm_log(MM_LOG_INFO, MM_LOG_TAG, f, ##__VA_ARGS__)
 #define mm_logd(f, ...)							\
-	mm_log(MM_LOG_DEBUG, f, ##__VA_ARGS__)
+	mm_log(MM_LOG_DEBUG, MM_LOG_TAG, f, ##__VA_ARGS__)
+
+#define mm_loge_tag(t, f, ...)						\
+	mm_log(MM_LOG_ERR, t, f, ##__VA_ARGS__)
+#define mm_logi_tag(t, f, ...)						\
+	mm_log(MM_LOG_INFO, t, f, ##__VA_ARGS__)
+#define mm_logd_tag(t, f, ...)						\
+	mm_log(MM_LOG_DEBUG, t, f, ##__VA_ARGS__)
+
 #endif /* _OSVELTE_MM_UTILS_H */

@@ -22,7 +22,8 @@ OPLUS_SUN_BOARDS += dodge-23821-sun-overlay.dtbo\
                     pagani-24875-sun-overlay.dtbo\
                     ktm-24851-sun-overlay-gauge-ti.dtbo\
                     ktm-24851-sun-overlay-gauge-mpc.dtbo\
-                    ktm-24851-sun-overlay-gauge-ti-dvt2.dtbo
+                    ktm-24851-sun-overlay-gauge-ti-dvt2.dtbo\
+                    volkswagen-24816-sun-overlay.dtbo
 
 
 dtb-y += $(OPLUS_SUN_BOARDS) $(SUN_BASE_DTB)

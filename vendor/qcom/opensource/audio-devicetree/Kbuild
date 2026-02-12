@@ -51,6 +51,7 @@ dtbo-y += oplus/erhai-24924-audio-sun-overlay-T0.dtbo
 dtbo-y += oplus/pagani-24821-audio-sun-overlay.dtbo
 dtbo-y += oplus/ktm-24851-audio-sun-overlay.dtbo
 dtbo-y += oplus/ktm-24851-audio-sun-overlay-T0.dtbo
+dtbo-y += oplus/volkswagen-24816-audio-tuna-overlay.dtbo
 #OPLUS_DTS_OVERLAY end
 endif
 

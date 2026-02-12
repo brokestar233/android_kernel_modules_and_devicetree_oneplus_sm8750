@@ -45,6 +45,11 @@
 #include "hybridswap/internal.h"
 #endif
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+#include "../mm_osvelte/sys-memstat.h"
+#include "../mm_osvelte/common.h"
+#endif
+
 static DEFINE_IDR(zram_index_idr);
 /* idr index must be protected */
 static DEFINE_MUTEX(zram_index_mutex);
@@ -2470,6 +2475,47 @@ static void destroy_devices(void)
 	cpuhp_remove_multi_state(CPUHP_ZCOMP_PREPARE);
 }
 
+
+/******************************************************************************
+ *                          osvelte mtrack interface
+ ******************************************************************************/
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+static long read_zram_usage(enum mtrack_subtype type)
+{
+	long ret = 0;
+	struct zram *zram = zram_arr[ZRAM_TYPE_BASEPAGE];
+
+	/* zram may be null if lowmem happen before zram is initialized. */
+	if (unlikely(!zram))
+		return 0;
+
+	switch (type) {
+	case MTRACK_ZRAM_ORIG:
+		ret = atomic64_read(&zram->stats.pages_stored);
+		break;
+	case MTRACK_ZRAM_COMPR_BYTES:
+		ret = (u64)atomic64_read(&zram->stats.compr_data_size);
+		break;
+	case MTRACK_ZRAM_MEMUSED:
+		down_read(&zram->init_lock);
+		if (init_done(zram))
+			ret = zs_get_total_pages_oplus(zram->mem_pool);
+		up_read(&zram->init_lock);
+		break;
+	case MTRACK_ZRAM_SAMEPAGES:
+		ret = (u64)atomic64_read(&zram->stats.same_pages);
+		break;
+	default:
+		break;
+	}
+	return ret;
+}
+
+static struct mtrack_debugger zram_mtrack_debugger = {
+	.mem_usage = read_zram_usage,
+};
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
+
 static int __init zram_init(void)
 {
 	int ret;
@@ -2516,6 +2562,9 @@ static int __init zram_init(void)
 	if (ret)
 		goto out_error;
 #endif
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	register_mtrack_debugger(MTRACK_ZRAM, &zram_mtrack_debugger);
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 	return 0;
 
 out_error:

@@ -218,6 +218,11 @@
 		reg = <0x0 0xb8000000 0x0 0x1c0000>;
 	};
 
+       gunyah_hyp_mem1: gunyah_hyp_region1@b81c0000 {
+       no-map;
+       reg = <0x0 0xb81c0000 0x0 0x800000>;
+       };
+
 	/* merged tz_reserved, xbl_sc, and qtee regions */
 	tz_merged_mem: tz_merged_region@d8000000 {
 		no-map;

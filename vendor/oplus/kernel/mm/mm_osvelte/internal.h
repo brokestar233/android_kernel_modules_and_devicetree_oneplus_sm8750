@@ -8,12 +8,14 @@
 #include <asm/ioctls.h>
 #include "common.h"
 
+#include "mm-utils.h"
+
 /* experimental feature */
 #define OSVELTE_FEATURE_USE_HASHLIST 1
 
 #define OSVELTE_MAJOR		(0)
 #define OSVELTE_MINOR		(2)
-#define OSVELTE_PATCH_NUM	(5)
+#define OSVELTE_PATCH_NUM	(7)
 #define OSVELTE_VERSION (OSVELTE_MAJOR << 16 | OSVELTE_MINOR)
 
 #define CMD_COMMON_MIN		CMD_OSVELTE_SET_SCENE
@@ -25,43 +27,13 @@
 	enum { OSVELTE_static_assert = 1 / (int)(!!(c)) };	\
 }
 
-#define MM_LOG_LVL 1
-enum {
-	MM_LOG_VERBOSE = 0,
-	MM_LOG_INFO,
-	MM_LOG_DEBUG,
-	MM_LOG_ERR,
-};
+#define OSVELTE_TAG "osvelte"
+#define osvelte_loge(f, ...)					\
+	mm_loge_tag(OSVELTE_TAG, f, ##__VA_ARGS__)
 
-static inline char mm_loglvl_to_char(int l)
-{
-	switch (l) {
-	case MM_LOG_VERBOSE:
-		return 'V';
-	case MM_LOG_INFO:
-		return 'I';
-	case MM_LOG_DEBUG:
-		return 'D';
-	case MM_LOG_ERR:
-		return 'E';
-	}
-	return '?';
-}
+#define osvelte_logi(f, ...)					\
+	mm_logi_tag(OSVELTE_TAG, f, ##__VA_ARGS__)
 
-#define osvelte_log(l, f, ...) do {					\
-	if (l >= MM_LOG_LVL) 						\
-		printk(KERN_ERR "%s %5d %5d %c %-16s: %s:%d "f,		\
-		       OSVELTE_LOG_TAG, current->tgid, current->pid,	\
-		       mm_loglvl_to_char(l), current->comm, __func__,	\
-		       __LINE__,  ##__VA_ARGS__);			\
-} while (0)
-
-#define osvelte_loge(f, ...)						\
-	osvelte_log(MM_LOG_ERR, f, ##__VA_ARGS__)
-
-#define osvelte_logi(f, ...)						\
-	osvelte_log(MM_LOG_INFO, f, ##__VA_ARGS__)
-
-#define osvelte_logd(f, ...)						\
-	osvelte_log(MM_LOG_DEBUG, f, ##__VA_ARGS__)
+#define osvelte_logd(f, ...)					\
+	mm_logd_tag(OSVELTE_TAG, f, ##__VA_ARGS__)
 #endif /* _OSVELTE_INTERNAL_H */

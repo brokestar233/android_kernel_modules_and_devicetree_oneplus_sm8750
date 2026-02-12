@@ -172,6 +172,30 @@ static int __dcvs_tuning_scm_entry(struct adreno_device *adreno_dev, u32 param, 
 }
 #endif
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static int __dcvs_boost_scm_entry(struct adreno_device *adreno_dev, bool val)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrscale *pwrscale = &device->pwrscale;
+	int ret;
+
+	if (!mutex_trylock(&adreno_dev->dcvs_tuning_mutex))
+		return -EDEADLK;
+
+	ret = msm_adreno_tz_set_dcvs_boost(pwrscale->devfreqptr, val);
+	if (ret == 0)
+		adreno_dev->dcvs_boost = val;
+	mutex_unlock(&adreno_dev->dcvs_tuning_mutex);
+
+	return ret;
+}
+#else
+static int __dcvs_boost_scm_entry(struct adreno_device *adreno_dev, bool val)
+{
+	return -EOPNOTSUPP;
+}
+#endif
+
 static int _dcvs_tuning_mingap_store(struct adreno_device *adreno_dev,
 		unsigned int val)
 {
@@ -212,6 +236,19 @@ static int _dcvs_tuning_numbusy_store(struct adreno_device *adreno_dev,
 static u32 _dcvs_tuning_numbusy_show(struct adreno_device *adreno_dev)
 {
 	return adreno_dev->dcvs_tuning_numbusy_lvl;
+}
+
+static bool _dcvs_boost_show(struct adreno_device *adreno_dev)
+{
+	return adreno_dev->dcvs_boost;
+}
+
+static int _dcvs_boost_store(struct adreno_device *adreno_dev, bool val)
+{
+	if (adreno_dev->dcvs_boost == val)
+		return 0;
+
+	return __dcvs_boost_scm_entry(adreno_dev, val);
 }
 
 static int _gpu_llc_slice_enable_store(struct adreno_device *adreno_dev,
@@ -568,6 +605,7 @@ static DEVICE_ATTR_RO(gpufault_procs);
 static ADRENO_SYSFS_U32(dcvs_tuning_mingap);
 static ADRENO_SYSFS_U32(dcvs_tuning_penalty);
 static ADRENO_SYSFS_U32(dcvs_tuning_numbusy);
+static ADRENO_SYSFS_BOOL(dcvs_boost);
 
 static const struct attribute *_attr_list[] = {
 	&adreno_attr_ft_policy.attr.attr,
@@ -599,6 +637,7 @@ static const struct attribute *_attr_list[] = {
 	&adreno_attr_dcvs_tuning_mingap.attr.attr,
 	&adreno_attr_dcvs_tuning_penalty.attr.attr,
 	&adreno_attr_dcvs_tuning_numbusy.attr.attr,
+	&adreno_attr_dcvs_boost.attr.attr,
 	NULL,
 };
 

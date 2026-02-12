@@ -63,6 +63,7 @@ def define_oplus_local_modules():
                 "//kernel_device_modules-{}/drivers/soc/oplus/device_info:device_info".format(kernel_version),
                 "//kernel_device_modules-{}/drivers/base/kernelFwUpdate:oplus_bsp_fw_update".format(kernel_version),
                 "//kernel_device_modules-{}/drivers/base/touchpanel_notify:oplus_bsp_tp_notify".format(kernel_version),
+                "//vendor/oplus/kernel/dft/bazel:oplus_bsp_dft_olc".format(kernel_version),
             ]
             copts = [
                 "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include/",
@@ -274,6 +275,9 @@ def define_oplus_local_modules():
         includes = ["."],
         copts = copts,
 #        local_defines = ["CONFIG_REMOVE_OPLUS_FUNCTION"],
+        conditional_defines = {
+            "mtk":  ["CONFIG_TOUCHPANEL_MTK_PLATFORM"],
+        },
     )
 
     define_oplus_ddk_module(

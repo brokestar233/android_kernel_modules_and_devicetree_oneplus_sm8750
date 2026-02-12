@@ -534,6 +534,7 @@ void oplus_panel_tx_cmd_set_pre(struct dsi_panel *panel,
 				enum dsi_cmd_set_type *type)
 {
 	oplus_panel_cmd_switch(panel, type);
+	oplus_panel_video_mode_aod_off_cmd_switch(panel, type);
 	oplus_panel_cmdq_sync_handle(panel, *type, true);
 	oplus_panel_vid_cmdp_handle(panel, *type);
 	oplus_panel_cmd_print(panel, *type);
@@ -1054,6 +1055,7 @@ void oplus_display_ops_init(struct oplus_display_ops *oplus_display_ops)
 	oplus_display_ops->panel_update_backlight = oplus_panel_update_backlight;
 	oplus_display_ops->backlight_setup_pre = oplus_backlight_setup_pre;
 	oplus_display_ops->backlight_setup_post = oplus_backlight_setup_post;
+	oplus_display_ops->get_aod_state = oplus_ofp_get_aod_state;
 
 	/* commit */
 	oplus_display_ops->encoder_kickoff = oplus_encoder_kickoff;

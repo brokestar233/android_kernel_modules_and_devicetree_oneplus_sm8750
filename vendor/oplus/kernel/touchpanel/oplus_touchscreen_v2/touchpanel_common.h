@@ -1099,6 +1099,7 @@ struct touchpanel_data {
 	bool fp_grip_support;                               /* edge grip for fingerprint */
 	bool long_strip_abnormal_detect_support;
 	bool fp_grip_hold;
+	bool idle_freq_support;
 	int  fp_grip_enable;
 	u8 aiunit_game_get_num;
 	u8 aiunit_game_set_num;

@@ -1520,6 +1520,7 @@ void ili_report_ap_mode(u8 *buf, int len)
 		}
 		ilits->glove_mode_flag = ilits->glove_mode;
 	}
+	ILI_DBG("glove_mode = %d, water_flag = %d, thr = %d\n", ilits->glove_mode, ilits->water_flag, ilits->thr);
 
 	ilitek_tddi_touch_send_debug_data(buf, len);
 	if (ilits->chip->support_driver_ver > DRIVER_VER_2080 && ilits->position_high_resolution == ON) {
@@ -1677,8 +1678,10 @@ int ili_aod_control(bool ctrl)
 		}
 	} else {
 		ILI_INFO("Doing actual ap mode \n");
-		ili_sleep_handler(TP_RESUME);
-		ilits->aod_in = 0;
+		if (ilits->aod_in) {
+			ili_sleep_handler(TP_RESUME);
+			ilits->aod_in = 0;
+		}
 	}
 	ILI_INFO("AOD control end\n");
 	return ret;
@@ -3185,6 +3188,7 @@ static int ilitek_mode_switch(void *chip_data, work_mode mode, int flag)
 
 	case MODE_INCELL_AOD:
 		ILI_INFO("MODE_INCELL_AOD flag = %d\n", flag);
+		chip_info->gesture = flag;
 		ret = ili_aod_control(flag);
 		break;
 

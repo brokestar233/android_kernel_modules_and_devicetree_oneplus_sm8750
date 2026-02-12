@@ -25,6 +25,10 @@ dtbo-$(CONFIG_ARCH_TUNA)  += tuna-camera.dtbo
 # 				tuna-camera-sensor-cdp.dtbo \
 # 				tuna-camera-sensor-qrd.dtbo
 
+dtbo-$(CONFIG_ARCH_TUNA)  += oplus/vw-camera-overlay-evb.dtbo \
+
+dtbo-$(CONFIG_ARCH_TUNA)  += oplus/vwIn-camera-overlay-evb.dtbo \
+
 dtbo-$(CONFIG_ARCH_KERA)  += kera-camera.dtbo
 #dtbo-$(CONFIG_ARCH_KERA)  += kera-camera-sensor-mtp.dtbo \
 #				kera-camera-sensor-cdp.dtbo \

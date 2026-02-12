@@ -1523,19 +1523,9 @@ static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platfor
 
 	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
 		/* Get virtual device handle for CX GDSC to control it */
-		struct device *cx_pd, *gmu_cx_pd;
+		struct device *cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "cx");
 
-		gmu_cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gmu_cx");
-		if (IS_ERR_OR_NULL(gmu_cx_pd)) {
-			dev_err_probe(&pdev->dev, PTR_ERR(gmu_cx_pd),
-					"Failed to attach GMU cx power domain\n");
-			return IS_ERR(gmu_cx_pd) ? PTR_ERR(gmu_cx_pd) : -EINVAL;
-		}
-		pwr->gmu_cx_pd = gmu_cx_pd;
-
-		cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "cx");
 		if (IS_ERR_OR_NULL(cx_pd)) {
-			dev_pm_domain_detach(gmu_cx_pd, false);
 			dev_err_probe(&pdev->dev, PTR_ERR(cx_pd),
 					"Failed to attach cx power domain\n");
 			return IS_ERR(cx_pd) ? PTR_ERR(cx_pd) : -EINVAL;

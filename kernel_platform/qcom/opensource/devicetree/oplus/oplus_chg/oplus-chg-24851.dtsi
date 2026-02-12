@@ -1720,6 +1720,8 @@
 
 		oplus,target_vbus_mv = <11000>;
 		oplus,curr_max_ma = <10950>;
+		oplus,curr_max_ma_percent = <3500 /* 75% ibus */
+					    2000 /* 85% ibus */>;
 		oplus,subboard_ntc_abnormal_current = <7300>;
 		oplus,ufcs_warm_allow_vol = <4000>;
 		oplus,ufcs_warm_allow_soc = <55>;

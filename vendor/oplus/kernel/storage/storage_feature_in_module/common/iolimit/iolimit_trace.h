@@ -55,6 +55,6 @@ TRACE_EVENT(iolimit_write_control,
 
 #undef TRACE_INCLUDE_PATH
 #define TRACE_INCLUDE_PATH .
-#define TRACE_INCLUDE_FILE trace
+#define TRACE_INCLUDE_FILE iolimit_trace
 
 #include <trace/define_trace.h>

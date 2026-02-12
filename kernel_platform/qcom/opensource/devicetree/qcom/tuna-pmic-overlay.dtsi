@@ -37,10 +37,16 @@
 	status = "ok";
 };
 
+//#ifdef OPLUS_FEATURE_CAMERA_COMMON
 &pmxr2230_switch0 {
-	qcom,led-mask = <9>; /* Channels 1 & 4 */
-	qcom,symmetry-en;
+	qcom,led-mask = <3>;/* Channels 0 & 1 */
 };
+//#else
+//&pmxr2230_switch0 {
+//	qcom,led-mask = <9>; /* Channels 1 & 4 */
+//	qcom,symmetry-en;
+//};
+//#endif /* OPLUS_FEATURE_CAMERA_COMMON*/
 
 &pmxr2230_switch1 {
 	qcom,led-mask = <6>; /* Channels 2 & 3 */

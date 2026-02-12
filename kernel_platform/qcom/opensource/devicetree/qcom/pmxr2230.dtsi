@@ -90,7 +90,7 @@
 				qcom,default-led-trigger = "flash0_trigger";
 				qcom,id = <0>;
 				qcom,duration-ms = <1280>;
-				qcom,ires-ua = <12500>;
+				qcom,ires-ua = <5000>;
 			};
 
 			pmxr2230_flash1: qcom,flash_1 {
@@ -100,7 +100,7 @@
 				qcom,default-led-trigger = "flash1_trigger";
 				qcom,id = <1>;
 				qcom,duration-ms = <1280>;
-				qcom,ires-ua = <12500>;
+				qcom,ires-ua = <5000>;
 			};
 
 			pmxr2230_flash2: qcom,flash_2 {
@@ -129,7 +129,7 @@
 				qcom,max-current-ma = <500>;
 				qcom,default-led-trigger = "torch0_trigger";
 				qcom,id = <0>;
-				qcom,ires-ua = <12500>;
+				qcom,ires-ua = <5000>;
 			};
 
 			pmxr2230_torch1: qcom,torch_1 {
@@ -138,7 +138,7 @@
 				qcom,max-current-ma = <500>;
 				qcom,default-led-trigger = "torch1_trigger";
 				qcom,id = <1>;
-				qcom,ires-ua = <12500>;
+				qcom,ires-ua = <5000>;
 			};
 
 			pmxr2230_torch2: qcom,torch_2 {

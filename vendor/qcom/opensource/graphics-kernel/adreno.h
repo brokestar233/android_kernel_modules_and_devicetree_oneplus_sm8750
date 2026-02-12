@@ -805,6 +805,8 @@ struct adreno_device {
 	u32 dcvs_tuning_penalty_lvl;
 	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
 	u32 dcvs_tuning_numbusy_lvl;
+	/** @dcvs_boost: Tracks if dcvs boost is enabled or disabled */
+	bool dcvs_boost;
 };
 
 /* Time to wait for suspend recovery gate to complete */
