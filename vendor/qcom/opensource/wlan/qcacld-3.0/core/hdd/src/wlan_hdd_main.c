@@ -337,7 +337,7 @@ static struct kparam_string fwpath = {
 	.maxlen = BUF_LEN,
 };
 
-char *country_code = "US";
+char *country_code;
 #ifdef FEATURE_WLAN_RESIDENT_DRIVER
 EXPORT_SYMBOL(country_code);
 #endif
@@ -23896,7 +23896,7 @@ module_param(enable_dfs_chan_scan, int, S_IRUSR | S_IRGRP | S_IROTH);
 
 module_param(enable_11d, int, S_IRUSR | S_IRGRP | S_IROTH);
 
-module_param(country_code, charp, 0444);
+module_param(country_code, charp, S_IRUSR | S_IRGRP | S_IROTH);
 
 static int timer_multiplier_get_handler(char *buffer,
 					const struct kernel_param *kp)
