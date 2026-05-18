@@ -127,6 +127,29 @@ bool oplus_is_factory_boot(void)
 }
 EXPORT_SYMBOL(oplus_is_factory_boot);
 
+bool oplus_display_is_screen_off(void)
+{
+	struct dsi_display *display = get_main_display();
+	struct dsi_panel *panel;
+
+	if (!display || !display->panel)
+		return false;
+
+	panel = display->panel;
+
+	if (!dsi_panel_initialized(panel))
+		return true;
+
+	if (panel->power_mode != SDE_MODE_DPMS_ON)
+		return true;
+
+	if (oplus_ofp_get_aod_state())
+		return true;
+
+	return false;
+}
+EXPORT_SYMBOL(oplus_display_is_screen_off);
+
 int oplus_panel_event_data_notifier_trigger(struct dsi_panel *panel,
 		enum panel_event_notification_type notif_type,
 		u32 data,

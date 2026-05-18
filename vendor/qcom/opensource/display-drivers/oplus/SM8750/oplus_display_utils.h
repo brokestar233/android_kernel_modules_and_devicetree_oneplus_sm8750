@@ -57,6 +57,7 @@ int oplus_display_unregister_client(struct notifier_block *nb);
 bool oplus_is_correct_display(enum oplus_display_support_list lcd_name);
 bool oplus_is_silence_reboot(void);
 bool oplus_is_factory_boot(void);
+bool oplus_display_is_screen_off(void);
 int oplus_display_get_resolution(unsigned int *xres, unsigned int *yres);
 
 /* add for dual panel */
