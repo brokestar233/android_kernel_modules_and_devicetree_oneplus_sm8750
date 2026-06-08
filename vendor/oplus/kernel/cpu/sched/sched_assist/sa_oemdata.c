@@ -81,6 +81,8 @@ void android_vh_dup_task_struct_handler(void *unused,
 	smp_mb();
 
 	WRITE_ONCE(tsk->android_oem_data1[OTS_IDX], (u64) ots);
+
+	sched_setaffinity_tracking(tsk, tsk->cpus_ptr);
 }
 
 void android_vh_free_task_handler(void *unused, struct task_struct *tsk)
@@ -138,6 +140,8 @@ void android_vh_free_task_handler(void *unused, struct task_struct *tsk)
 		ots_free_powermodel_task_state(ots);
 	}
 #endif
+
+	ots->im_flag = 0;
 
 	free_oplus_task_struct(ots);
 }

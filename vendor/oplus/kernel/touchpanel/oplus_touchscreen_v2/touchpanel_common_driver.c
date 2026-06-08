@@ -236,6 +236,7 @@ int mode_switch_health(struct touchpanel_data *ts, work_mode mode, int flag)
 			   (MODE_EDGE == mode) ? "mode_edge_switch_fail" :
 			   (MODE_GESTURE == mode) ? "mode_gesture_switch_fail" :
 			   (MODE_GLOVE == mode) ? "mode_glove_mode_fail" :
+			   (MODE_RAINSTORM == mode) ? "mode_rainstorm_mode_fail" :
 			   (MODE_LEATHER_COVER == mode) ? "mode_leather_cover_mode_fail" :
 			   (MODE_CHARGE == mode) ? "mode_charge_switch_fail" :
 			   (MODE_GAME == mode) ? "mode_game_switch_fail" :
@@ -320,6 +321,10 @@ void operate_mode_switch(struct touchpanel_data *ts)
 
 		if (ts->glove_mode_v2_support) {
 			mode_switch_health(ts, MODE_GLOVE, ts->glove_enable && (!ts->pocket_prevent_mode));
+		}
+
+		if (ts->rainstorm_mode_v2_support) {
+			mode_switch_health(ts, MODE_RAINSTORM, ts->rainstorm_enable);
 		}
 
 		if (ts->glove_mode_support || ts->leather_cover_mode_support) {
@@ -735,7 +740,8 @@ static void tp_exception_handle(struct touchpanel_data *ts)
 		touch_call_notifier_fp(ts, &ts->fp_info);
 	}
 	if (ts->exception_upload_support) {
-		tp_exception_report(&ts->exception_data, EXCEP_IRQ, "tp_exception_handle", sizeof("tp_exception_handle"));
+		TP_INFO(ts->tp_index, "EXCEP_TOUCH_IC_RESET upload\n");
+		tp_exception_report(&ts->exception_data, EXCEP_TOUCH_IC_RESET, "fw_status_err", sizeof("fw_status_err"));
 	}
 }
 
@@ -2389,6 +2395,7 @@ static int init_parse_dts(struct device *dev, struct touchpanel_data *ts)
 	ts->esd_handle_support      = of_property_read_bool(np, "esd_handle_support");
 	ts->fw_edge_limit_support   = of_property_read_bool(np,
 				      "fw_edge_limit_support");
+	ts->report_rate_v2_support      = of_property_read_bool(np, "report_rate_v2_support");
 	ts->charger_pump_support    = of_property_read_bool(np, "charger_pump_support");
 	ts->wireless_charger_support = of_property_read_bool(np,
 				       "wireless_charger_support");
@@ -2407,6 +2414,7 @@ static int init_parse_dts(struct device *dev, struct touchpanel_data *ts)
 	ts->game_enable_in_tddi_support     = of_property_read_bool(np, "game_enable_in_tddi_support");
 	ts->glove_mode_support      = of_property_read_bool(np, "glove_mode_support");
 	ts->glove_mode_v2_support      = of_property_read_bool(np, "glove_mode_v2_support");
+	ts->rainstorm_mode_v2_support      = of_property_read_bool(np, "rainstorm_mode_v2_support");
 	ts->leather_cover_mode_support      = of_property_read_bool(np, "leather_cover_mode_support");
 	ts->is_noflash_ic           = of_property_read_bool(np, "noflash_support");
 	ts->face_detect_support     = of_property_read_bool(np, "face_detect_support");

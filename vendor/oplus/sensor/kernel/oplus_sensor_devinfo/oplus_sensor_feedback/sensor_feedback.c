@@ -83,7 +83,14 @@ struct sensor_fb_conf g_fb_conf[] = {
 	{ACCEL_DATA_BLOCK_ID, "device_acc_data_block", SENSOR_DEVICE_TYPE},
 	{ACCEL_SUB_DATA_BLOCK_ID, "device_sub_acc_data_block", SENSOR_DEVICE_TYPE},
 	{ACCEL_DATA_FULL_RANGE_ID, "device_acc_data_full_range", SENSOR_DEVICE_TYPE},
+	{ACCEL_SW_RESET_ID, "device_acc_sw_reset", SENSOR_DEVICE_TYPE},
+	{ACCEL_NO_DATA_ID, "device_acc_no_data", SENSOR_DEVICE_TYPE},
+	{ANY_MOTION_ENABLE_FAIL_ID, "device_any_motion_enable_fail", SENSOR_DEVICE_TYPE},
+	{ACCEL_CHANGE_FSR_FAIL_ID, "device_acc_change_fsr_fail", SENSOR_DEVICE_TYPE},
 
+	{ACCEL_SUB_I2C_ERR_ID, "device_acc_sub_i2c_err", SENSOR_DEVICE_TYPE},
+	{ACCEL_SUB_ESD_REST_ID, "device_acc_sub_esd_reset", SENSOR_DEVICE_TYPE},
+	{ACCEL_SUB_NO_DATA_ID, "device_acc_sub_no_data", SENSOR_DEVICE_TYPE},
 
 	{GYRO_INIT_FAIL_ID, "device_gyro_init_fail", SENSOR_DEVICE_TYPE},
 	{GYRO_I2C_ERR_ID, "device_gyro_i2c_err", SENSOR_DEVICE_TYPE},
@@ -98,6 +105,11 @@ struct sensor_fb_conf g_fb_conf[] = {
 	{GYRO_OTC_B_ID, "device_gyro_otc_b", SENSOR_DEVICE_TYPE},
 	{GYRO_OTC_BIAS_ID, "device_gyro_otc_bias", SENSOR_DEVICE_TYPE},
 	{GYRO_OTC_TEMP_ID, "device_gyro_otc_temp", SENSOR_DEVICE_TYPE},
+	{GYRO_NO_DATA_ID, "device_gyro_no_data", SENSOR_DEVICE_TYPE},
+
+	{GYRO_SUB_NO_DATA_ID, "device_gyro_sub_no_data", SENSOR_DEVICE_TYPE},
+	{GYRO_SUB_DATA_BLOCK_ID, "device_gyro_sub_data_block", SENSOR_DEVICE_TYPE},
+	{GYRO_SUB_ESD_REST_ID, "device_gyro_sub_esd_reset", SENSOR_DEVICE_TYPE},
 
 	{MAG_INIT_FAIL_ID, "device_mag_init_fail", SENSOR_DEVICE_TYPE},
 	{MAG_I2C_ERR_ID, "device_mag_i2c_err", SENSOR_DEVICE_TYPE},
@@ -109,6 +121,8 @@ struct sensor_fb_conf g_fb_conf[] = {
 	{MAG_CALI_DATA_ID, "device_mag_cali_data", SENSOR_DEBUG_DEVICE_TYPE},
 	{MAG_DATA_BLOCK_ID, "device_mag_data_block_data", SENSOR_DEBUG_DEVICE_TYPE},
 	{MAG_DATA_FULL_RANGE_ID, "device_mag_data_full_range", SENSOR_DEBUG_DEVICE_TYPE},
+	{MAG_NO_DATA_ID, "device_mag_no_data_range", SENSOR_DEVICE_TYPE},
+	{MAG_ENABLE_FAIL_ID, "device_mag_enable_fail_range", SENSOR_DEVICE_TYPE},
 
 
 	{SAR_INIT_FAIL_ID, "device_sar_init_fail", SENSOR_DEVICE_TYPE},

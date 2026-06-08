@@ -14,14 +14,26 @@
 #define DEFAULT_BUF_MATRIX_LINEBREAK    8
 #define PREFIX_HEALTH_REPORT        "health_report-"
 
+#define SIG_SCREEN_ON_NO_ACK_TIMEOUT_CNT             "sig_screen_on_no_ack_timeout_cnt"
+#define SIG_SCREEN_OFF_NO_ACK_TIMEOUT_CNT            "sig_screen_off_no_ack_timeout_cnt"
+#define SIG_SCREEN_ON_NO_ACK_CNT                     "sig_screen_on_no_ack_cnt"
+#define SIG_SCREEN_OFF_NO_ACK_CNT                    "sig_screen_off_no_ack_cnt"
+#define MAX_NO_ACK_CNT                               4
+
 struct health_value_count {
 	struct list_head head;
 	void *value;
 	int count;
 };
 
+struct notify_data {
+	long screen_on_no_ack_cnt;
+	long screen_off_no_ack_cnt;
+};
+
 struct monitor_data {
 	struct list_head	health_report_list;
+	struct notify_data notify;
 };
 
 int hbp_healthinfo_report(struct monitor_data *monitor_data, char *report);

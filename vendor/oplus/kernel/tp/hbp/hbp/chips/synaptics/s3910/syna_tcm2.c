@@ -17,6 +17,14 @@ static int syna_dev_read(void *priv, char *data, int32_t len)
 	return tcm_hcd->bus_ops->read_block(tcm_hcd->bus_ops, data, len);
 }
 */
+void syna_hw_reset(struct syna_tcm *tcm_hcd)
+{
+	hbp_dev_power_type_ctrl(tcm_hcd, POWER_RESET, false);
+	msleep(10);
+	hbp_dev_power_type_ctrl(tcm_hcd, POWER_RESET, true);
+	msleep(100);
+}
+
 static int syna_spi_sync(void *priv, char *tx, char *rx, int32_t len)
 {
 	struct syna_tcm *tcm_hcd = (struct syna_tcm *)priv;
@@ -143,7 +151,7 @@ static int syna_get_irq_reason(void *priv, enum irq_reason *reason)
 			&tcm_hcd->event_data);
 	if (retval < 0) {
 		hbp_err("Fail to get event data\n");
-		hbp_dev_ctrl_hw_reset();
+		syna_hw_reset(tcm_hcd);
 		return -1;
 	}
 
@@ -544,7 +552,7 @@ static int syna_dev_probe(struct platform_device *pdev)
 			break;
 		}
 		hbp_err("Detect device fail, retry = %d.\n", retry);
-		hbp_dev_ctrl_hw_reset();
+		syna_hw_reset(tcm_hcd);
 	}
 
 	tcm_hcd->probe_done = true;

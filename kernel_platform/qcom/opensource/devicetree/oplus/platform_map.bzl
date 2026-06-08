@@ -59,6 +59,9 @@ _platform_map = {
         ],
         "dtbo_list": [
             {"name": "volkswagen-24816-sun-overlay.dtbo"},
+            {"name": "volkswagen-24885-sun-overlay-IN-T0.dtbo"},
+            {"name": "volkswagen-24885-sun-overlay-IN.dtbo"},
+            {"name": "volkswagen-24885-sun-overlay-EU.dtbo"},
         ],
     },
     "kera": {

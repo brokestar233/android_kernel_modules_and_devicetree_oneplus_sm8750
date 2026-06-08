@@ -919,7 +919,7 @@
 
 	/* ofp config */
 	oplus,ofp-fp-type = <0x02>;
-	oplus,ofp-longrui-aod-config = <0x06>;
+	oplus,ofp-longrui-aod-config = <0x0e>;
 	oplus,ofp-need-to-wait-data-before-aod-on;
 
 	qcom,mdss-dsi-display-timings {

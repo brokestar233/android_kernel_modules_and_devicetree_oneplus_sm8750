@@ -428,6 +428,9 @@
 					OPLUS_IC_FUNC_GAUGE_SET_VCT
 					OPLUS_IC_FUNC_GAUGE_GET_VCT
 					OPLUS_IC_FUNC_GAUGE_GET_GAUGE_R_INFO
+					OPLUS_IC_FUNC_GAUGE_FCC_VDELTA_CHECK
+					OPLUS_IC_FUNC_GAUGE_FFC_T_RA_CHECK
+					OPLUS_IC_FUNC_GAUGE_FFC_RA0_CHECK
 				>;
 				virqs = <
 					OPLUS_IC_VIRQ_ERR
@@ -1072,13 +1075,32 @@
 			/* checksum data_len data+ */
 			0xfd 0x04 0xf4 0x46 0xc8 0x00 /* Charge Term Taper Current 200mA */
 			0x24 0x03 0x90 0x45 0x06 /* MIN_RES_POINTS 6 */
-			0x24 0x03 0x91 0x45 0x05 /* RA_MAX_DELTA 5 */
+			0x27 0x03 0x91 0x45 0x02 /* RA_MAX_DELTA 5 */
 			0xd8 0x03 0xe8 0x45 0xfa /* SOH_LOAD_RATE 250 */
 			0x2 0x04 0x94 0x45 0x25 0xff /* RES_PARA_FILTER 65317 */
 			0x3d 0x04 0x96 0x45 0xed 0xfa /* RA_PARA_FILTER 64237 */
 			0xeb 0x03 0x89 0x45 0x46 /* MIN_DOD_RES 70 */
 			0x73 0x04 0x8e 0x45 0xb6 0x3 /* RA_PARA_FILTER 950 */
 			>;
+
+		oplus_spec,fcc-ra-0-support;
+		oplus_spec,fcc-ra-vdelta-support;
+		oplus_spec,fcc-ra-delta-vmax = <30>;
+		oplus_spec,fcc-ra-delta-cc = <1>;
+		oplus_spec,fcc-ra-t-support;
+		oplus_spec,fcc-ra-t-delta-cc0 = <30>;
+		oplus_spec,fcc-ra-t-delta-cc1 = <20>;
+		oplus_spec,fcc-ra-default = <90 90 89 76 75
+					    66 83 196 224 259
+					    307 332 430 606 794>;
+		oplus_spec,fcc-ra-cc-thr = <0 500 800 1000 1500>;
+		oplus_spec,fcc-ra-fcc0-thr = <5400 5400 5400 5400 5400>;
+		oplus_spec,fcc-ra-extreme-thr = <1400 1600 1800 2000 2500>;
+		oplus_spec,fcc-ra-k-curve = <900 1120 1100 1000 980
+					    900 1150 1200 1050 985
+					    900 1180 1300 1100 990
+					    900 1210 1400 1100 990
+					    900 1240 1400 1100 990>;
 
 		oplus,ic_type = <OPLUS_CHG_IC_GAUGE>;
 		oplus,ic_index = <0>;

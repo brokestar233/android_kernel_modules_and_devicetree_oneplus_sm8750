@@ -2740,6 +2740,42 @@ mode_err:
 	return ret;
 }
 
+static void fts_report_rate(void *chip_data, int value)
+{
+	struct chip_data_ft3683g *ts_data = (struct chip_data_ft3683g *)chip_data;
+	int ret = 0;
+	int regvalue = 0;
+
+	TPD_INFO("fts_report_rate_ctrl to  value: %d", value);
+	if (ts_data == NULL) {
+		return;
+	}
+
+	if (ts_data->ts->is_suspended) {
+		return;
+	}
+
+	switch(value) {
+	case REPORT_FPS_DEFAULT:
+		regvalue = FTS_120HZ_REPORT_RATE;
+		break;
+	case REPORT_FPS_180HZ:
+		regvalue = FTS_180HZ_REPORT_RATE;
+		break;
+	case REPORT_FPS_240HZ:
+		regvalue = FTS_240HZ_REPORT_RATE;
+		break;
+	default:
+		TPD_INFO("%s:default report rate = %d \n", __func__, value);
+		return;
+	}
+
+	ret = fts_write_reg(FTS_REG_REPORT_RATE, regvalue);
+	if (ret < 0) {
+		TPD_INFO("write FTS_REG_REPORT_RATE fail");
+		return;
+	}
+}
 static int fts_send_temperature(void *chip_data, int temp, bool normal_mode);
 
 #ifndef CONFIG_ARCH_QTI_VM
@@ -2950,43 +2986,43 @@ static void fts_read_fod_error_info(struct chip_data_ft3683g *ts_data)
 		TPD_INFO("%s:read FOD error info fail", __func__);
 		return;
 	}
-	TPD_INFO("TP_FP_ERROR_REPORT:fingerprint error type:[%*ph]\n", FTS_REG_FOD_ERROR_INFO_LEN, val);
+	TPD_DEBUG("TP_FP_ERROR_REPORT:fingerprint error type:[%*ph]\n", FTS_REG_FOD_ERROR_INFO_LEN, val);
 	switch (val[FTS_REG_FOD_ERROR_INFO_LEN - 1]) {
 	case FTS_FINGERPRINT_AREA_NOT_MATCH:
 		if (ts_data->monitor_data && ts_data->monitor_data->health_monitor_support) {
 			tp_healthinfo_report(ts_data->monitor_data, HEALTH_REPORT, "fingerprint_area_not_match_count");
 		}
-		TPD_INFO("TP_FP_ERROR_REPORT:area size: 0x%x\n", val[12]);
-		TPD_INFO("TP_FP_ERROR_REPORT:FINGERPRINT_AREA_NOT_MATCH\n");
+		TPD_DEBUG("TP_FP_ERROR_REPORT:area size: 0x%x\n", val[12]);
+		TPD_DEBUG("TP_FP_ERROR_REPORT:FINGERPRINT_AREA_NOT_MATCH\n");
 		break;
 	case FTS_ANOTHER_FINGER_ON_NON_FP_ZONE:
 		if (ts_data->monitor_data && ts_data->monitor_data->health_monitor_support) {
 			tp_healthinfo_report(ts_data->monitor_data, HEALTH_REPORT, "another_finger_on_non-fingerprint_zone_count");
 		}
-		TPD_INFO("TP_FP_ERROR_REPORT:x:0x%x,y:0x%x\n", (val[4] << 8) + val[5], (val[6] << 8) + val[7]);
-		TPD_INFO("TP_FP_ERROR_REPORT:ANOTHER_FINGER_ON_NON_FP_ZONE\n");
+		TPD_DEBUG("TP_FP_ERROR_REPORT:x:0x%x,y:0x%x\n", (val[4] << 8) + val[5], (val[6] << 8) + val[7]);
+		TPD_DEBUG("TP_FP_ERROR_REPORT:ANOTHER_FINGER_ON_NON_FP_ZONE\n");
 		break;
 	case FTS_FINGERPRINT_DOWN_BEFORE_FP_ENABLE:
 		if (ts_data->monitor_data && ts_data->monitor_data->health_monitor_support) {
 			tp_healthinfo_report(ts_data->monitor_data, HEALTH_REPORT, "fingerprint_down_before_fp_enable_count");
 		}
-		TPD_INFO("TP_FP_ERROR_REPORT:down time: %*ph\n", 4, val);
-		TPD_INFO("TP_FP_ERROR_REPORT:FINGERPRINT_DOWN_BEFORE_FP_ENABLE\n");
+		TPD_DEBUG("TP_FP_ERROR_REPORT:down time: %*ph\n", 4, val);
+		TPD_DEBUG("TP_FP_ERROR_REPORT:FINGERPRINT_DOWN_BEFORE_FP_ENABLE\n");
 		break;
 	case FTS_FINGERPRINT_X_Y_NOT_MATCH:
 		if (ts_data->monitor_data && ts_data->monitor_data->health_monitor_support) {
 			tp_healthinfo_report(ts_data->monitor_data, HEALTH_REPORT, "fingerprint_x_y_not_match_count");
 		}
-		TPD_INFO("TP_FP_ERROR_REPORT:FINGERPRINT_X_Y_NOT_MATCH\n");
+		TPD_DEBUG("TP_FP_ERROR_REPORT:FINGERPRINT_X_Y_NOT_MATCH\n");
 		break;
 	case FTS_FINGERPRINT_OUT_MOVE_IN:
 		if (ts_data->monitor_data && ts_data->monitor_data->health_monitor_support) {
 			tp_healthinfo_report(ts_data->monitor_data, HEALTH_REPORT, "fingerprint_out_move_in_count");
 		}
-		TPD_INFO("TP_FP_ERROR_REPORT:FINGERPRINT_OUT_MOVE_IN\n");
+		TPD_DEBUG("TP_FP_ERROR_REPORT:FINGERPRINT_OUT_MOVE_IN\n");
 		break;
 	default:
-		TPD_INFO("TP_FP_ERROR_REPORT:unknown fingerprint error type: 0x%x\n", val[FTS_REG_FOD_ERROR_INFO_LEN - 1]);
+		TPD_DEBUG("TP_FP_ERROR_REPORT:unknown fingerprint error type: 0x%x\n", val[FTS_REG_FOD_ERROR_INFO_LEN - 1]);
 		break;
 	}
 
@@ -3388,9 +3424,6 @@ static int fts_get_touch_points(void *chip_data, struct point_info *points,
 		/*ts_data->touch_event_num = event_num;*/
 
 		for (i = 0; i < event_num; i++) {
-			if (event_num == 0) {
-				break;
-			}
 			base = FTS_ONE_TCH_LEN_V2 * i + 4;
 			base_prevent = 4 * i;
 			pointid = (touch_buf[FTS_TOUCH_OFF_ID_YH + base]) >> 4;
@@ -3460,10 +3493,6 @@ static int fts_get_touch_points(void *chip_data, struct point_info *points,
 					points[pointid].status = 1;
 					obj_attention |= (1 << pointid);
 
-					if (event_num == 0) {
-						TPD_INFO("abnormal touch data from fw");
-						return -EINVAL;
-					}
 				}
 			if (ts_data->differ_read_every_frame && (ts_data->tp_differ_version == FTS_DIFFER_VERSION_V2)) {
 				if (event_flag == 0) {
@@ -3901,6 +3930,10 @@ static void fts_screenon_fingerprint_info(void *chip_data,
 	TPD_INFO("FOD Info:touch_state:%d,area_rate:%d,x:%d,y:%d[fp_down:%d]",
 	         fp_tpinfo->touch_state, fp_tpinfo->area_rate, fp_tpinfo->x,
 	         fp_tpinfo->y, ts_data->fod_info.fp_down);
+
+	if (ts_data->fingerprint_error_report_support && fp_tpinfo->touch_state == FINGERPRINT_UP_DETECT) {
+		fts_read_fod_error_info(ts_data);
+	}
 }
 
 static void fts_register_info_read(void *chip_data, uint16_t register_addr,
@@ -4087,7 +4120,7 @@ static void fts_get_rawdata_snr(struct chip_data_ft3683g *ts_data)
 	int sc_num = tx_num + rx_num;
 	int j = 0;
 	u8 *touch_buf = ts_data->snr_buf;
-	u8 *data_8;
+	u8 *data_8 = NULL;
 
 	for (j = 0; j < 10; j = j + 1) {
 		if (ts_data->snr_data_is_ready) {
@@ -4104,6 +4137,11 @@ static void fts_get_rawdata_snr(struct chip_data_ft3683g *ts_data)
 	} else if (ts_data->tp_differ_version == FTS_DIFFER_VERSION_V2) {
 		ts_data->snr_count = touch_buf[151];
 		data_8 = &touch_buf[154];
+	}
+
+	if (!data_8) {
+		TPD_INFO("%s: Invalid differ version or data_8 not initialized", __func__);
+		return;
 	}
 
 	for (j = 0; j < raw_num; j = j + 1) {
@@ -4520,6 +4558,7 @@ static struct oplus_touchpanel_operations fts_ops = {
 	.set_high_frame_rate        = fts_set_high_frame_rate,
 	.rate_white_list_ctrl       = fts_rate_white_list_ctrl,
 	.edge_limit_switch_write    = fts_edge_limit_switch_write,
+	.report_rate                = fts_report_rate,
 	.diaphragm_touch_lv_set         = fts_diaphragm_touch_lv_set,
 	.get_water_mode            = fts_get_water_mode,
 	.get_glove_mode            = fts_get_glove_mode,

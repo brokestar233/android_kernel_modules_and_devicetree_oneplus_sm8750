@@ -2853,6 +2853,6 @@
 	oplus,pwm-compatible-mode;
 	oplus,cmdq-sync-support;
 	oplus,interval-time-nolp-pre;
-
+	oplus,interval-time-switch-fps-to-esd;
 	// oplus,gamma-compensation-support;
 };

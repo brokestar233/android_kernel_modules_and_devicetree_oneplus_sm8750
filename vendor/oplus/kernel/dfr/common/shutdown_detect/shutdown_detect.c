@@ -1055,6 +1055,11 @@ static void shutdown_timeout_flag_write(int timeout)
 	}
 }
 
+static bool should_dump_android_log(void)
+{
+	return shutdown_phase >= SHUTDOWN_STAGE_INIT && get_eng_version() != HIGH_TEMP_AGING;
+}
+
 static int shutdown_detect_func(void *dummy)
 {
 	/* schedule_timeout_uninterruptible(gtotaltimeout * HZ); */
@@ -1067,9 +1072,9 @@ static int shutdown_detect_func(void *dummy)
 	pr_err("shutdown_detect:%s shutdown_detect status:%u. \n", __func__,
 	       shutdown_phase);
 
-	if (shutdown_phase >= SHUTDOWN_STAGE_INIT) {
+	/* Skip dump on HIGH_TEMP_AGING builds to avoid child forked here hanging */
+	if (should_dump_android_log())
 		shutdown_dump_android_log();
-	}
 
 #if IS_ENABLED (CONFIG_OPLUS_BSP_DFR_USERSPACE_BACKTRACE)
 	/* add init stage userspace backtrace dump */

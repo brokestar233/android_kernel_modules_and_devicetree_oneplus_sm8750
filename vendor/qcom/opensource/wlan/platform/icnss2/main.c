@@ -60,6 +60,9 @@
 #include "debug.h"
 #include "power.h"
 #include "genl.h"
+#ifdef OPLUS_BUG_STABILITY
+#include <linux/pm_qos.h>
+#endif /* OPLUS_BUG_STABILITY */
 
 
 #ifdef OPLUS_FEATURE_WIFI_BDF
@@ -106,6 +109,10 @@ module_param(qmi_timeout, ulong, 0600);
 #define ICNSS_RECOVERY_TIMEOUT		60000
 #define ICNSS_WPSS_SSR_TIMEOUT          5000
 #define ICNSS_CAL_TIMEOUT		40000
+
+#ifdef OPLUS_BUG_STABILITY
+static struct pm_qos_request pm_qos_req;
+#endif /* OPLUS_BUG_STABILITY */
 
 static struct icnss_priv *penv;
 static struct work_struct wpss_loader;
@@ -1934,6 +1941,26 @@ out:
 	return 0;
 }
 
+#ifdef OPLUS_BUG_STABILITY
+static void wpss_pm_qos_update(int new_value)
+{
+	static int last_value = -1;
+
+	if (!cpu_latency_qos_request_active(&pm_qos_req))
+		cpu_latency_qos_add_request(&pm_qos_req, new_value);
+	else
+		cpu_latency_qos_update_request(&pm_qos_req, new_value);
+
+	if (last_value != new_value) {
+		last_value = new_value;
+		if (new_value ==  PM_QOS_DEFAULT_VALUE)
+			icnss_pr_err("wpss_pm_qos_update PM_QOS_DEFAULT_VALUE \n");
+		else
+			icnss_pr_err("wpss_pm_qos_update value = %d \n", new_value);
+	}
+}
+#endif /* OPLUS_BUG_STABILITY */
+
 static int icnss_pd_restart_complete(struct icnss_priv *priv)
 {
 	int ret = 0;
@@ -1949,6 +1976,10 @@ static int icnss_pd_restart_complete(struct icnss_priv *priv)
 	clear_bit(ICNSS_LOW_POWER, &priv->state);
 	priv->early_crash_ind = false;
 	priv->is_ssr = false;
+
+#ifdef OPLUS_BUG_STABILITY
+	wpss_pm_qos_update(PM_QOS_DEFAULT_VALUE);
+#endif /* OPLUS_BUG_STABILITY */
 
 	if (!priv->ops || !priv->ops->reinit)
 		goto out;
@@ -2406,6 +2437,10 @@ static int icnss_fw_crashed(struct icnss_priv *priv,
 	struct icnss_uevent_fw_down_data fw_down_data = {0};
 
 	icnss_pr_dbg("FW crashed, state: 0x%lx\n", priv->state);
+
+#ifdef OPLUS_BUG_STABILITY
+	wpss_pm_qos_update(2);
+#endif /* OPLUS_BUG_STABILITY */
 
 	set_bit(ICNSS_PD_RESTART, &priv->state);
 

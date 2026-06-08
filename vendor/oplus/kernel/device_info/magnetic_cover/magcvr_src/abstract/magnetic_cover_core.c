@@ -1166,7 +1166,7 @@ int magcvr_set_position(struct magnetic_cover_info *magcvr_info)
 	}
 
 #if IS_ENABLED(CONFIG_OPLUS_MAGCVR_NOTIFY)
-	magcvr_set_current_pos(magcvr_info->position);
+	magcvr_set_current_pos(magcvr_info->magcvr_index, magcvr_info->position);
 #endif
 	magcvr_info->last_position = magcvr_info->position;
 

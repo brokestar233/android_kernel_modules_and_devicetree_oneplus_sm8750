@@ -196,6 +196,11 @@ int oplus_panel_parse_bl_cfg(struct dsi_panel *panel)
 	OPLUS_DSI_INFO("oplus,bl-demura-set-by-one-frame: %s\n",
 			panel->oplus_panel.bl_cfg.oplus_bl_demura_set_by_one_frame ? "true" : "false");
 
+	panel->oplus_panel.bl_cfg.video_mode_aod_close_backlight_sync = utils->read_bool(utils->data,
+			"oplus,video-mode-aod-close-backlight-sync");
+	OPLUS_DSI_INFO("oplus,video-mode-aod-close-backlight-sync: %s\n",
+			panel->oplus_panel.bl_cfg.video_mode_aod_close_backlight_sync ? "true" : "false");
+
 	return 0;
 }
 
@@ -205,30 +210,38 @@ static int oplus_display_panel_dly(struct dsi_panel *panel, bool hbm_switch)
 		if (enable_hbm_enter_dly_on_flags)
 			enable_hbm_enter_dly_on_flags++;
 		if (0 == oplus_global_hbm_flags) {
+#ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND
 			if (dsi_panel_tx_cmd_set(panel, DSI_CMD_DLY_ON, false)) {
 				return 0;
 			}
+#endif /* #ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND */
 			enable_hbm_enter_dly_on_flags = 1;
 		} else if (4 == enable_hbm_enter_dly_on_flags) {
+#ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND
 			if (dsi_panel_tx_cmd_set(panel, DSI_CMD_DLY_OFF, false)) {
 				return 0;
 			}
+#endif /* #ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND */
 			enable_hbm_enter_dly_on_flags = 0;
 		}
 	} else {
 		if (oplus_global_hbm_flags == 1) {
+#ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND
 			if (dsi_panel_tx_cmd_set(panel, DSI_CMD_DLY_ON, false)) {
 				return 0;
 			}
+#endif /* #ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND */
 			enable_hbm_exit_dly_on_flags = 1;
 		} else {
 			if (enable_hbm_exit_dly_on_flags)
 				enable_hbm_exit_dly_on_flags++;
 			if (3 == enable_hbm_exit_dly_on_flags) {
 				enable_hbm_exit_dly_on_flags = 0;
+#ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND
 				if (dsi_panel_tx_cmd_set(panel, DSI_CMD_DLY_OFF, false)) {
 					return 0;
 				}
+#endif /* #ifdef OPLUS_FEATURE_DISPLAY_DLY_EXTEND */
 			}
 		}
 	}
@@ -1530,4 +1543,19 @@ int oplus_sync_panel_brightness_video(struct drm_encoder *drm_enc)
 	OPLUS_DSI_TRACE_INT("oplus_dsi_cmd_set_type", dsi_cmd_set_type_status);
 
 	return ret;
+}
+
+void oplus_set_aod_close_backlight_sync(struct dsi_display *display)
+{
+	unsigned int refresh_rate = 0;
+
+	refresh_rate = display->panel->cur_mode->timing.refresh_rate;
+	if (display->panel->oplus_panel.bl_cfg.video_mode_aod_close_backlight_sync && refresh_rate == 90
+			&& display->panel->oplus_panel.last_power_mode == SDE_MODE_DPMS_ON) {
+		display->queue_cmd_waits = false;
+		OPLUS_DSI_INFO("queue_cmd_waits:%d\n", display->queue_cmd_waits);
+		OPLUS_DSI_TRACE_INT("queue_cmd_waits", display->queue_cmd_waits);
+	}
+
+	return;
 }

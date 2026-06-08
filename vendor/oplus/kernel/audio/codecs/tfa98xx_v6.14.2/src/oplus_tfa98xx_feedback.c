@@ -42,8 +42,20 @@
 #define CHECK_STATUS_REGS_MASKS            (0xF)
 #define CHECK_SPEAKER_MASKS                (0x100)
 
-/* SB35-->8.28*/
-#define TFA_LIB_VER_SB35                   0x81c0000
+enum {
+	TFA_LIB_VERSION_SB28_VALUE = 0x81c0000, /* 8.28.0.0 */
+	TFA_LIB_VERSION_SB35_VALUE = 0x8230400, /* 8.35.4.0 */
+	TFA_LIB_VERSION_SB38_VALUE = 0x8260100, /* 8.38.1.0 */
+};
+
+/* enum for library version */
+enum {
+	TFA_LIB_VERSION_SB28 = 0,  /* 8.28.0.0 */
+	TFA_LIB_VERSION_SB35,      /* 8.35.4.0 */
+	TFA_LIB_VERSION_SB38,      /* 8.38.1.0 */
+	TFA_LIB_VERSION_NUM,
+	TFA_LIB_VERSION_INVALID = 0xff  /* invalid version */
+};
 
 #define RE_BASE_RANGE                      2500
 #define RE_ERR_COUNT_FB                    3
@@ -74,8 +86,15 @@ enum {
 #define TFA_OFFSET_BASE              3
 #define PARAM_OFFSET(pos, id)        (TFA_OFFSET_BASE + ((id) * POS_NUM + (pos)) * TFA_DATA_BYTES)
 #define GET_VALUE(pdata, offset)     ((pdata[offset] << 16) + (pdata[offset+1] << 8) + pdata[offset+2])
-#define TFA_GET_R0(pdata, id)        (GET_VALUE(pdata, PARAM_OFFSET(POS_R0, id)) / 65) /* 65 ~ 0x10000 / 1000 */
-#define TFA_GET_F0(pdata, id)        (GET_VALUE(pdata, PARAM_OFFSET(POS_F0, id)))
+
+const int r0_factor[TFA_LIB_VERSION_NUM] = {65, 65, 65}; /* 65 ~ 0x10000 / 1000 */
+
+#define TFA_GET_R0(pdata, id)        (GET_VALUE(pdata, PARAM_OFFSET(POS_R0, id)) / r0_factor[tfa_fb.lib_new])
+
+const int f0_factor[TFA_LIB_VERSION_NUM] = {1, 1, 2048}; /* 1 ~ 0x1, 1 ~ 0x1, 2048 ~ 0x800 */
+
+#define TFA_GET_F0(pdata, id)        (GET_VALUE(pdata, PARAM_OFFSET(POS_F0, id)) / f0_factor[tfa_fb.lib_new])
+
 #define TFA_MAX_RESULT_LEN           (MAX_SPK_NUM * POS_NUM * TFA_DATA_BYTES + TFA_OFFSET_BASE)
 #define TFA_RESULT_BUF_LEN           ((TFA_MAX_RESULT_LEN + 3) & (~3))
 #define TFA_ONE_ALGO_MAX_RESULT_LEN  (2 * POS_NUM * TFA_DATA_BYTES + TFA_OFFSET_BASE)
@@ -167,7 +186,7 @@ static struct oplus_tfa98xx_feedback tfa_fb = {
 	.pa_cnt = 0,
 	.cmd_step = 0,
 	.lib_version = 0,
-	.lib_new = 0xff,
+	.lib_new = TFA_LIB_VERSION_INVALID,
 	.r0_cal = {0, 0, 0, 0},
 	.f0_cal = {0, 0, 0, 0},
 	.damage_flag = 0,
@@ -708,19 +727,26 @@ static int tfa98xx_check_new_lib(struct tfa98xx *tfa98xx)
 {
 	unsigned int lib_ver = 0;
 
-	if ((tfa_fb.lib_new == 0) || (tfa_fb.lib_new == 1)) {
+	if (tfa_fb.lib_new < TFA_LIB_VERSION_NUM){
 		return Tfa98xx_Error_Ok;
 	}
 
 	if (Tfa98xx_Error_Ok == tfa98xx_get_lib_version(tfa98xx, &lib_ver)) {
 		if (lib_ver != 0) {
 			tfa_fb.lib_version = lib_ver;
-			tfa_fb.lib_new = (lib_ver > TFA_LIB_VER_SB35) ? 1 : 0;
-			pr_info("lib_new=%d", tfa_fb.lib_new);
+			if (lib_ver <= TFA_LIB_VERSION_SB28_VALUE) { // 8.28.0.0
+				tfa_fb.lib_new = TFA_LIB_VERSION_SB28;
+			} else if (lib_ver <= TFA_LIB_VERSION_SB35_VALUE) { // 8.35.4.0
+				tfa_fb.lib_new = TFA_LIB_VERSION_SB35;
+			} else if (lib_ver <= TFA_LIB_VERSION_SB38_VALUE) { // 8.38.1.0
+				tfa_fb.lib_new = TFA_LIB_VERSION_SB38;
+			} else {
+				pr_err("invalid lib_ver=%u, use default SB38", lib_ver);
+				tfa_fb.lib_new = TFA_LIB_VERSION_SB38;
+			}
 			return Tfa98xx_Error_Ok;
 		}
 	}
-
 	return -1;
 }
 
@@ -774,28 +800,42 @@ static int tfa98xx_set_ready_cmd(struct tfa98xx *tfa98xx, uint32_t algo_flag)
 
 	/*cmd BYTE0: first algorithm: 0x00, second algorithm: 0x10*/
 	/*cmd BYTE5: need to change as accroding to get param num */
-	int8_t tfaCmdReady[] = {
-		0x00, 0x80, 0x0b, 0x00, 0x00, 0x04,
-		/*first speaker: R0, F0*/
-		0x22, 0x00, 0x00,
-		0x22, 0x00, 0x13,
-		/*second speaker*/
-		0x22, 0x00, 0x01,
-		0x22, 0x00, 0x14
+	/* lib_new: TFA_LIB_VERSION_SB28->SB28, TFA_LIB_VERSION_SB35->SB35, TFA_LIB_VERSION_SB38->SB38 */
+	int8_t tfaCmdReady[TFA_LIB_VERSION_NUM][18] = {
+		{/* SB28 */
+			0x00, 0x80, 0x0b, 0x00, 0x00, 0x04,
+			/*first speaker: R0, F0*/
+			0x22, 0x00, 0x00,
+			0x22, 0x00, 0x13,
+			/*second speaker*/
+			0x22, 0x00, 0x01,
+			0x22, 0x00, 0x14
+		},
+		{/* SB35 */
+			0x00, 0x80, 0x0b, 0x00, 0x00, 0x04,
+			/*first speaker: R0, F0*/
+			0x22, 0x00, 0x00,
+			0x22, 0x00, 0x1b,
+			/*second speaker*/
+			0x22, 0x00, 0x01,
+			0x22, 0x00, 0x1c
+		},
+		{/* SB38 */
+			0x00, 0x80, 0x0b, 0x00, 0x00, 0x04,
+			/*first speaker: R0, F0*/
+			0x22, 0x00, 0x00,
+			0x22, 0x00, 0x1d,
+			/*second speaker*/
+			0x22, 0x00, 0x01,
+			0x22, 0x00, 0x1e
+		}
 	};
 
-	/* for new version SB4.0 */
-	int8_t tfaCmdReady_SB40[] = {
-		0x00, 0x80, 0x0b, 0x00, 0x00, 0x04,
-		/*first speaker: R0, F0*/
-		0x22, 0x00, 0x00,
-		0x22, 0x00, 0x1b,
-		/*second speaker*/
-		0x22, 0x00, 0x01,
-		0x22, 0x00, 0x1c
-	};
-
-	pcmd = tfa_fb.lib_new ? tfaCmdReady_SB40 : tfaCmdReady;
+	if (tfa_fb.lib_new >= TFA_LIB_VERSION_NUM) {
+		pr_err("invalid lib_new=%u, use newest version", tfa_fb.lib_new);
+		tfa_fb.lib_new = TFA_LIB_VERSION_NUM - 1;
+	}
+	pcmd = tfaCmdReady[tfa_fb.lib_new];
 	if (1 == algo_flag) {
 		*(pcmd + TFA_CMD_HEAD_OFFSET) = 0x00;
 		spk_num = (tfa_fb.pa_cnt == 1) ? 1 : 2;
@@ -1062,8 +1102,7 @@ static void tfa98xx_check_work(struct work_struct *work)
 	case READ_RESULT_FB_1:
 	/* set cmd to get r0, f0 */
 		ret = tfa98xx_get_result(tfa98xx_1, result, sizeof(result), 1);
-		if (ret == Tfa98xx_Error_Ok
-			&& ((tfa98xx_1->rev & 0xFF) != 0x66)) {
+		if (ret == Tfa98xx_Error_Ok){
 			tfa98xx_check_result(result, 1);
 		}
 		break;
@@ -1083,8 +1122,7 @@ static void tfa98xx_check_work(struct work_struct *work)
 		/* set cmd to get r0, f0 */
 		if (tfa98xx_2) {
 			ret = tfa98xx_get_result(tfa98xx_2, result, sizeof(result), 2);
-			if (ret == Tfa98xx_Error_Ok
-					&& ((tfa98xx_1->rev & 0xFF) != 0x66)) {
+			if (ret == Tfa98xx_Error_Ok) {
 				tfa98xx_check_result(result, 2);
 			}
 		}

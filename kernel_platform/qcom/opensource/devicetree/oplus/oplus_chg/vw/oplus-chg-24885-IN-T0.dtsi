@@ -1,5 +1,7 @@
 /* qcom battery gauge, svooc-80w, no-ufcs */
 #include "oplus-chg-vw-common.dtsi"
+#include "oplus-chg-vw-gpio-switch.dtsi"
+#include "oplus-chg-vw-cn-in-curve.dtsi"
 
 &oplus_cpa {
 	oplus,protocol_list = <CHG_PROTOCOL_VOOC 80

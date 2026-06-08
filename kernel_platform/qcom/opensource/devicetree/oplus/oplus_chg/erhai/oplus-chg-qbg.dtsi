@@ -1,4 +1,7 @@
 &oplus_mms_gauge {
+	oplus,fcl_support;
+	oplus,fcl_index = <1>;
+	oplus,vb_offset = <0>;
 	oplus,voocphy_ic = <&oplus_virtual_vphy>;
 	oplus_virtual_gauge: oplus,virtual_gauge {
 		compatible = "oplus,virtual_gauge";
@@ -47,6 +50,10 @@
 				OPLUS_IC_FUNC_GAUGE_GET_DOD0_PASSED_Q
 				OPLUS_IC_FUNC_GAUGE_GET_QMAX
 				OPLUS_IC_FUNC_GAUGE_GET_QMAX_PASSED_Q
+				OPLUS_IC_FUNC_GAUGE_GET_DEC_FG_TYPE
+				OPLUS_IC_FUNC_GAUGE_GET_DEC_CV_SOH
+				OPLUS_IC_FUNC_GAUGE_SET_VCT
+				OPLUS_IC_FUNC_GAUGE_GET_VCT
 			>;
 			virqs = <
 				OPLUS_IC_VIRQ_ERR

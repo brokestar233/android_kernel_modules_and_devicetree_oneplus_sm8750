@@ -25,6 +25,7 @@
 #define NR_FREQ 64 /* since MTK platform could reach 32 levels */
 #define NR_CLUS_MAX 3
 #define NR_CORE_MAX 8
+#define NR_LEVEL_MAX 1000
 
 struct freq_qos_request *cpu_req;
 
@@ -148,6 +149,11 @@ module_param_named(core_boost_lat_ns, core_boost_lat_ns, uint, 0664);
 
 static bool core_ctl_check;
 module_param_named(core_ctl_check, core_ctl_check, bool, 0664);
+
+static inline int is_freq(int val)
+{
+	return val > NR_LEVEL_MAX;
+}
 
 static void cb_reset_qos(int cpu)
 {
@@ -299,6 +305,7 @@ static inline struct cpufreq_bouncing *cb_get(int cpu)
 /* module parameters */
 static int cb_config_store(const char *buf, const struct kernel_param *kp)
 {
+	int i;
 	/*
 	 * for limit_thres, down/up limit will use ms as unit
 	 * format:
@@ -338,9 +345,6 @@ static int cb_config_store(const char *buf, const struct kernel_param *kp)
 
 	cb = &cb_stuff[v.clus];
 
-	if (v.limit_level < 0 || v.limit_level >= cb->freq_levels)
-		goto out;
-
 	if (v.down_speed < 0 || v.down_speed > cb->freq_levels)
 		goto out;
 
@@ -352,12 +356,27 @@ static int cb_config_store(const char *buf, const struct kernel_param *kp)
 		goto out;
 
 	/* begin update config */
+	if (is_freq(v.limit_level)) {
+		if (v.limit_level < cb->min_freq || v.limit_level > cb->max_freq)
+			goto out;
+		for (i = 0; i <= cb->freq_levels; i++) {
+			if (cb->freqs[i] <= v.limit_level) {
+				cb->limit_freq = cb->freqs[i];
+				cb->limit_level = i;
+				break;
+			}
+		}
+	}
+	else {
+		if (v.limit_level < 0 || v.limit_level >= cb->freq_levels)
+			goto out;
+		cb->limit_level = v.limit_level;
+		cb->limit_freq = cb->freqs[cb->limit_level];
+	}
 	cb->enable = false;
 	cb->last_ts = 0;
 	cb->last_freq_update_ts = 0;
 	cb->acc = 0;
-	cb->limit_level = v.limit_level;
-	cb->limit_freq = cb->freqs[cb->limit_level];
 	cb->limit_thres = MSEC_TO_NSEC(v.limit_thres_ms);
 	cb->down_speed = v.down_speed;
 	cb->down_limit_ns = MSEC_TO_NSEC(v.down_limit_ms);

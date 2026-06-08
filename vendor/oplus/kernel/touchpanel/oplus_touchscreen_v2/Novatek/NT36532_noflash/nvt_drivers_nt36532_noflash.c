@@ -16,6 +16,8 @@
 #endif
 
 #include "nvt_drivers_nt36532_noflash.h"
+#include "../../touchpanel_healthinfo/touchpanel_exception.h"
+#include "../../touchpanel_common.h"
 
 /*******Part0:LOG TAG Declear********************/
 
@@ -1959,12 +1961,29 @@ static unsigned int nvt_trigger_reason(void *chip_data, int gesture_enable, int 
 	struct chip_data_nt36523 *chip_info = (struct chip_data_nt36523 *)chip_data;
 	int32_t ret = -1;
 	uint32_t irq_reason = IRQ_IGNORE;
+	uint8_t *point_data = NULL;
+	uint8_t uplink_status = 0;
+	uint8_t fw_status = 0;
+	uint8_t water_mode = 0;
+	uint8_t er_prevent = 0;
+	uint8_t bending = 0;
+	uint8_t palm_flag = 0;
+	uint8_t raw_flag = 0;
+	uint8_t diff_abnormal = 0;
+	uint8_t down_thd = 0;
+	uint8_t up_thd = 0;
+	int16_t maxdiff = 0;
+	int16_t mindiff = 0;
+	uint8_t pos_cnt = 0;
+	uint8_t neg_cnt = 0;
+	static int point_num1 = 0;
+	static int point_num2 = 0;
 
 	if (IS_ERR_OR_NULL(chip_info) || IS_ERR_OR_NULL(chip_info->point_data)) {
 		TPD_INFO("%s:NULL chip_info", __func__);
 		return IRQ_IGNORE;
 	}
-
+	point_data = chip_info->point_data;
 	memset(chip_info->point_data, 0, POINT_DATA_LEN);
 	ret = CTP_SPI_READ(chip_info->s_client, chip_info->point_data, POINT_DATA_LEN + 1);
 	if (ret < 0) {
@@ -1972,9 +1991,33 @@ static unsigned int nvt_trigger_reason(void *chip_data, int gesture_enable, int 
 		return IRQ_IGNORE;
 	}
 
+	/* debug status */
+	fw_status = (point_data[110] >> 6) & 0x03;
+	water_mode = (point_data[110] >> 2) & 0x01;
+	er_prevent = point_data[110] & 0x01;
+	bending = (point_data[110] >> 3) & 0x01;
+	palm_flag = ((point_data[1] & 0x7) == 0x5) ? 1 : 0;
+	raw_flag = (point_data[109] >> 6) & 0x01;
+	diff_abnormal = (point_data[109] >> 7) & 0x01;
+	uplink_status = (point_data[109] >> 3) & 0x01;
+	down_thd = point_data[112];
+	up_thd = point_data[113];
+	maxdiff = point_data[115] + (point_data[114] << 8);
+	mindiff = point_data[117] + (point_data[116] << 8);
+	pos_cnt = point_data[118];
+	neg_cnt = point_data[119];
+
+	TPD_SPECIFIC_PRINT(point_num1, "fw_status: %d, water_mode: %d, er_prevent: %d, bending: %d, palm: %d, raw_flag: %d, diff_abnormal: %d, uplink_status: %d\n",
+		fw_status, water_mode, er_prevent, bending, palm_flag, raw_flag, diff_abnormal, uplink_status);
+	TPD_SPECIFIC_PRINT(point_num2, "down_thd: %d, up_thd: %d, maxdiff: %d, mindiff: %d, pos_cnt: %d, neg_cnt: %d\n",
+		down_thd, up_thd, maxdiff, mindiff, pos_cnt, neg_cnt);
 	/*some kind of protect mechanism, after WDT firware redownload and try to save tp*/
 	ret = nvt_wdt_fw_recovery(chip_info, chip_info->point_data);
 	if (ret) {
+		tp_healthinfo_report(chip_info->monitor_data, HEALTH_REPORT, HEALTH_REPORT_FW_FD);
+		if (chip_info->ts->exception_upload_support) {
+			tp_exception_report(&chip_info->ts->exception_data, EXCEP_FW_FD, "firmware_fd", sizeof("firmware_fd"));
+		}
 		if ((gesture_enable == 1) && (is_suspended == 1)) {
 			/* auto go back to wakeup gesture mode */
 			TPD_INFO("Recover for fw reset %02X\n", chip_info->point_data[1]);
@@ -2262,6 +2305,15 @@ static int nvt_get_touch_points_high_reso(void *chip_data, struct point_info *po
 			points[pointid].status = 1;
 		} else if ((point_data[position] & 0x07) == STATUS_FINGER_HOLD) {
 			is_finger_hold = true;
+		}
+
+		/* edge reject info */
+		if (chip_info->ts && chip_info->ts->kernel_grip_support) {
+			position = 257 + 4 * i;
+			points[pointid].tx_press = point_data[position];
+			points[pointid].rx_press = point_data[position + 1];
+			points[pointid].tx_er = point_data[position + 2];
+			points[pointid].rx_er = point_data[position + 3];
 		}
 	}
 	/*no valid point and finger hold state, we should report cancel */
@@ -3301,6 +3353,18 @@ static int nvt_enable_pen_mode(struct chip_data_nt36523 *chip_info, bool enable)
 	} else {
 		ret = nvt_extend_cmd_store(chip_info, EVENTBUFFER_EXT_CMD, EVENTBUFFER_EXT_PEN_MODE_OFF);
 	}
+
+	return ret;
+}
+
+static int nvt_set_package_type(void *chip_data, int value)
+{
+	int8_t ret = -1;
+	struct chip_data_nt36523 *chip_info = (struct chip_data_nt36523 *)chip_data;
+
+	TPD_DEBUG("%s:value = %d, chip_info->is_sleep_writed = %d\n", __func__,
+			value, chip_info->is_sleep_writed);
+	ret = nvt_extend_cmd2_store(chip_info, EVENTBUFFER_EXT_CMD, EVENTBUFFER_EXT_SET_PACKAGE_TYPE, value);
 
 	return ret;
 }
@@ -5774,6 +5838,22 @@ static void nvt_aiunit_game_info(void *chip_data)
 	}
 }
 
+static void nvt_inject_wdt_reset(void *chip_data, int value)
+{
+	int8_t ret = -1;
+	struct chip_data_nt36523 *chip_info = (struct chip_data_nt36523 *)chip_data;
+
+	TPD_INFO("%s: %s inject watchdog reset.\n", __func__, value ? "Enter" : "Exit");
+
+	if (value) {
+		ret = nvt_cmd_store(chip_info, EVENTBUFFER_INJECT_WDT_RESET);
+		if (ret) {
+			TPD_INFO("%s: write EVENTBUFFER_INJECT_WDT_RESET reg fail\n", __func__);
+		}
+	}
+	return;
+}
+
 static struct oplus_touchpanel_operations nvt_ops = {
 	.ftm_process				= nvt_ftm_process,
 	.reset					  = nvt_reset,
@@ -5796,9 +5876,11 @@ static struct oplus_touchpanel_operations nvt_ops = {
 	.notify_pencil_type         = nvt_notify_pencil_type,
 	.notify_keyboard_open     = nvt_notify_keyboard_open,
 	.pen_sensitive_lv_set     = nvt_set_pen_jitter_para,
+	.set_package_type         = nvt_set_package_type,
 	.ftm_process_extra		  = NULL,
 	.aiunit_game_info         = nvt_aiunit_game_info,
 	.touch_leave_jitter_set   = nvt_set_leave_jitter,
+	.inject_wdt_reset         = nvt_inject_wdt_reset,
 };
 
 static void nvt_data_read(struct seq_file *s,

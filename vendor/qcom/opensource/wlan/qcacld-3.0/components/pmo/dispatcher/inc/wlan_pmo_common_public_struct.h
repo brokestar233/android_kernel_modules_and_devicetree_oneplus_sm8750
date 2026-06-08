@@ -190,8 +190,12 @@ enum pmo_suspend_mode {
 	PMO_SUSPEND_WOW,
 	PMO_SUSPEND_SHUTDOWN
 };
-
-#define PMO_TARGET_SUSPEND_TIMEOUT   (4000)
+//#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+//lixiong2@CONNECTIVITY.HARDWARE.WIFI.9832451, modify the time of suspend 
+//#define PMO_TARGET_SUSPEND_TIMEOUT   (4000)
+//#else
+#define PMO_TARGET_SUSPEND_TIMEOUT   (10000)
+//#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 #define PMO_WAKE_LOCK_TIMEOUT        1000
 #define PMO_RESUME_TIMEOUT           (4000)
 

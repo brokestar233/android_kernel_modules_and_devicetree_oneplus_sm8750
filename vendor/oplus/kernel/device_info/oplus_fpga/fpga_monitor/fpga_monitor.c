@@ -961,8 +961,8 @@ static void fpga_power_debug_work(struct work_struct *work)
 static void resume_check_work(struct work_struct *work)
 {
 	FPGA_ERR("resume_check_work enter!\n");
-	struct fpga_mnt_pri *mnt_pri = container_of(work, struct fpga_mnt_pri, resume_work);
-	msleep(200);
+	struct fpga_mnt_pri *mnt_pri = container_of(work, struct fpga_mnt_pri, resume_work.work);
+
 	if (!fpga_check_and_recovery(mnt_pri)) {
 		FPGA_ERR("fpga resume check and recovery fail!\n");
 	}
@@ -1009,8 +1009,8 @@ static int fpga_monitor_probe(struct i2c_client *i2c, const struct i2c_device_id
 	mnt_pri->dev = &i2c->dev;
 	mnt_pri->hb_workqueue = create_singlethread_workqueue("fpga_monitor");
 	INIT_DELAYED_WORK(&mnt_pri->hb_work, fpga_heartbeat_work);
-
-	INIT_WORK(&mnt_pri->resume_work, resume_check_work);
+	mnt_pri->resume_queue = create_singlethread_workqueue("fpga_resume");
+	INIT_DELAYED_WORK(&mnt_pri->resume_work, resume_check_work);
 
 	i2c_set_clientdata(i2c, mnt_pri);
 
@@ -1115,6 +1115,10 @@ void fpga_monitor_remove(struct i2c_client *i2c)
 	flush_workqueue(mnt_pri->hb_workqueue);
 	destroy_workqueue(mnt_pri->hb_workqueue);
 
+	cancel_delayed_work_sync(&g_mnt_pri->resume_work);
+	flush_workqueue(g_mnt_pri->resume_queue);
+	destroy_workqueue(g_mnt_pri->resume_queue);
+
 #if FPGA_POWER_DEBUG
 	cancel_delayed_work_sync(&mnt_pri->power_debug_work);
 	flush_workqueue(mnt_pri->power_debug_wq);
@@ -1139,6 +1143,7 @@ static int fpga_monitor_suspend(struct device *dev)
 		FPGA_ERR("mnt_pri is null\n");
 		return 0;
 	}
+	cancel_delayed_work(&mnt_pri->resume_work);
 	cancel_delayed_work_sync(&mnt_pri->hb_work);
 	mnt_pri->bus_ready = false;
 
@@ -1156,7 +1161,7 @@ static int fpga_monitor_resume(struct device *dev)
 		return 0;
 	}
 	mnt_pri->bus_ready = true;
-	schedule_work(&mnt_pri->resume_work);
+	mod_delayed_work(mnt_pri->resume_queue, &mnt_pri->resume_work, msecs_to_jiffies(FPGA_RESUME_WORK_TIME));
 	if (mnt_pri->heartbeat_switch != 0) {    // no rus set off, continue start work
 		queue_delayed_work(mnt_pri->hb_workqueue, &mnt_pri->hb_work, msecs_to_jiffies(FPGA_MONITOR_WORK_TIME));
 	}
@@ -1285,7 +1290,9 @@ void fpga_monitor_dev_shutdown(struct platform_device *pdev)
 	flush_workqueue(g_mnt_pri->hb_workqueue);
 	destroy_workqueue(g_mnt_pri->hb_workqueue);
 
-	cancel_work_sync(&g_mnt_pri->resume_work);
+	cancel_delayed_work_sync(&g_mnt_pri->resume_work);
+	flush_workqueue(g_mnt_pri->resume_queue);
+	destroy_workqueue(g_mnt_pri->resume_queue);
 
 #if FPGA_POWER_DEBUG
 	cancel_delayed_work_sync(&g_mnt_pri->power_debug_work);

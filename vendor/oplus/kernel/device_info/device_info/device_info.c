@@ -237,6 +237,9 @@ static int devinfo_read_emmc_func(struct seq_file *s, void *v)
 	case 0x9B:
 		manufacture = "YMTC";
 		break;
+	case 0x86:
+		manufacture = "XBSTOR";
+		break;
 	case 0x32:
 		manufacture = "PHISON";
 		break;

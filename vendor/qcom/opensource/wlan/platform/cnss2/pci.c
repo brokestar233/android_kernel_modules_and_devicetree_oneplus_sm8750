@@ -1855,6 +1855,15 @@ static inline void cnss_mhi_report_error(struct cnss_pci_data *pci_priv)
 static inline void cnss_mhi_report_error(struct cnss_pci_data *pci_priv) {}
 #endif
 
+#if IS_ENABLED(CONFIG_CNSS2_FMD_FEATURE_ENABLE)
+static inline void cnss_fmd_mhi_report_error(struct cnss_pci_data *pci_priv)
+{
+cnss_mhi_report_error(pci_priv);
+}
+#else
+static inline void cnss_fmd_mhi_report_error(struct cnss_pci_data *pci_priv) {}
+#endif
+
 void cnss_pci_notify_mhi_error(struct cnss_pci_data *pci_priv)
 {
 
@@ -3498,6 +3507,7 @@ int cnss_pci_fmd_status(struct cnss_pci_data *pci_priv,
 
 	if (fmd_status) {
 		ret = cnss_pci_fmd_enable(pci_priv);
+		cnss_fmd_mhi_report_error(pci_priv);
 		cnss_pr_dbg("Update FMD status to PCI: %d ret: %d\n",
 			    fmd_status, ret);
 	}

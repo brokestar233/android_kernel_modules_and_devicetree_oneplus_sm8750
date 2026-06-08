@@ -92,6 +92,7 @@
 #define FPGA_POWER_DEBUG          0
 #define FPGA_POWER_DEBUG_MAX_TIMES 5
 
+#define FPGA_RESUME_WORK_TIME     200
 #define FPGA_MONITOR_WORK_TIME    3000      /*ms*/
 #define FPGA_MONITOR_WORK_SLOWDOWN_TIME (24 * 60 * 60 * 1000 / 2)  /*ms*/
 
@@ -191,7 +192,8 @@ struct fpga_mnt_pri {
 	struct device *dev;
 	struct workqueue_struct *hb_workqueue;
 	struct delayed_work      hb_work;
-	struct work_struct resume_work;
+	struct workqueue_struct *resume_queue;
+	struct delayed_work resume_work;
 	struct fpga_status_t all_status;
 	struct fpga_status_t status;
 	struct proc_dir_entry *pr_entry;

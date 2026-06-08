@@ -5,6 +5,7 @@
 #include "sun_overlay_common.dtsi"
 #include "ktm_overlay_common.dtsi"
 #include "oplus_uff/oplus-uff-24851.dtsi"
+#include "mm/ktm-24851-sun-mm.dtsi"
 #include "oplus_chg/oplus-gauge-ti-24851.dtsi"
 #include "oplus_misc/oplus-misc-24851.dtsi"
 #include "oplus_icc/ktm-icc.dtsi"

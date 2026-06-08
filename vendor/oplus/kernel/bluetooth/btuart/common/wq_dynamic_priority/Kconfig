@@ -1,0 +1,5 @@
+config OPLUS_FEATURE_BTUART_UX
+	tristate "btuart workqueue UX priority"
+	default n
+	help
+	  Define this config to modify btuart workqueue priority for gki.

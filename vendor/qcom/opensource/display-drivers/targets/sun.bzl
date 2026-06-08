@@ -17,7 +17,6 @@ def define_sun():
                     "OPLUS_FEATURE_DISPLAY",
                     "OPLUS_FEATURE_DISPLAY_ADFR",
                     "OPLUS_FEATURE_DISPLAY_HIGH_PRECISION",
-                    "OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION",
                     "OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT",
                     "OPLUS_TRACKPOINT_REPORT",
                     "OPLUS_FEATURE_APDMR",

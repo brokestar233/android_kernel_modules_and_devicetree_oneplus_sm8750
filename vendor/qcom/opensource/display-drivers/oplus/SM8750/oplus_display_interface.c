@@ -311,6 +311,7 @@ void oplus_panel_switch_pre(struct dsi_panel *panel)
 void oplus_panel_switch_post(struct dsi_panel *panel)
 {
 	/* pwm switch due to timming switch */
+	panel->oplus_panel.switch_fps_to_esd_timestamp = ktime_get();
 	oplus_panel_pwm_switch_timing_switch(panel);
 	oplus_panel_timing_switch_wait_te(panel);
 

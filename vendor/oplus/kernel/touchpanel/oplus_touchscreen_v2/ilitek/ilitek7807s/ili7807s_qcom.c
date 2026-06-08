@@ -3298,7 +3298,15 @@ static int ilitek_mode_switch(void *chip_data, work_mode mode, int flag)
 		}
 
 		break;
+	case MODE_RAINSTORM:
+		ILI_INFO("MODE_RAINSTORM flag = %d\n", flag);
 
+		ret = ili_ic_func_ctrl("rainstorm", flag);
+		if (ret < 0) {
+			ILI_ERR("write MODE_RAINSTORM flag failed\n");
+		}
+
+		break;
 	default:
 		ILI_INFO("%s: Wrong mode.\n", __func__);
 	}

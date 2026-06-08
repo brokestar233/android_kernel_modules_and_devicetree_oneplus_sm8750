@@ -45,6 +45,12 @@
  */
 #define DEFAULT_SWITCH_DELAY		0x12
 
+/* Optimize headset buttons abnormal problem */
+#define DIO4483_REG_DELAY_TIME 0x21
+#define DIO4483_REG_0X2E 0x2E
+#define DIO4483_REG_0X2F 0x2F
+#define TYPEC_SWITCH_REG_MAX 0x30
+
 /* Add for log */
 #undef dev_dbg
 #define dev_dbg dev_info
@@ -124,7 +130,7 @@ struct typec_switch_reg_val {
 static const struct regmap_config typec_switch_regmap_config = {
 	.reg_bits = 8,
 	.val_bits = 8,
-	.max_register = DEFAULT_REG_RESET,
+	.max_register = TYPEC_SWITCH_REG_MAX,
 };
 
 static const struct typec_switch_reg_val switch_reg_i2c_defaults[] = {
@@ -162,10 +168,58 @@ int typec_switch_get_chip_vendor(struct device_node *node)
 }
 EXPORT_SYMBOL(typec_switch_get_chip_vendor);
 
+/* DIO4483: Optimize headset buttons abnormal problem */
+static void typec_switch_usbc_update_settings_dio4483(
+	struct typec_switch_priv *switch_priv,
+	u32 switch_control, u32 switch_enable)
+{
+	u32 prev_control = 0;
+	u32 prev_enable = 0;
+
+	if (!switch_priv->regmap) {
+		dev_err(switch_priv->dev, "%s: regmap invalid\n", __func__);
+		return;
+	}
+
+	regmap_read(switch_priv->regmap, DEFAULT_REG_SWITCH_CONTROL, &prev_control);
+	regmap_read(switch_priv->regmap, DEFAULT_REG_SWITCH_SETTINGS, &prev_enable);
+	if (prev_control == switch_control && prev_enable == switch_enable) {
+		dev_dbg(switch_priv->dev, "%s: settings unchanged\n", __func__);
+		return;
+	}
+
+	regmap_write(switch_priv->regmap, DEFAULT_REG_SWITCH_SETTINGS, 0x80);
+
+	/* Add DIO4480 support */
+	if ((switch_priv->vendor == DIO4480) || (switch_priv->vendor == DIO4483)) {
+		regmap_write(switch_priv->regmap, DEFAULT_REG_RESET, 0x01);//reset DIO4480
+		usleep_range(1000, 1005);
+	}
+
+	regmap_write(switch_priv->regmap, DEFAULT_REG_DELAY_L_SENSE, 0x00);
+	regmap_write(switch_priv->regmap, DEFAULT_REG_DELAY_L_AGND, 0x00);
+	regmap_write(switch_priv->regmap, DEFAULT_REG_DELAY_L_MIC, 0x0B);
+	regmap_write(switch_priv->regmap, DEFAULT_REG_DELAY_L_R, 0x0F);
+	regmap_write(switch_priv->regmap, DIO4483_REG_DELAY_TIME, 0x0F);
+	regmap_write(switch_priv->regmap, DEFAULT_REG_FUN_EN, 0x08);
+
+	regmap_write(switch_priv->regmap, DIO4483_REG_0X2E, 0x8F);
+	regmap_write(switch_priv->regmap, DIO4483_REG_0X2F, 0x45);
+	regmap_write(switch_priv->regmap, DIO4483_REG_0X2E, 0x72);
+
+	regmap_write(switch_priv->regmap, DEFAULT_REG_SWITCH_CONTROL, switch_control);
+	/* DEFAULT_REG chip hardware requirement */
+	usleep_range(50, 55);
+	regmap_write(switch_priv->regmap, DEFAULT_REG_SWITCH_SETTINGS, switch_enable);
+	/* Optimize the pop sound when the headset plug in */
+	usleep_range(DEFAULT_SWITCH_DELAY * 100, DEFAULT_SWITCH_DELAY * 100 + 50);
+}
+
 static void typec_switch_usbc_update_settings(struct typec_switch_priv *switch_priv,
 		u32 switch_control, u32 switch_enable)
 {
-	u32 prev_control, prev_enable;
+	u32 prev_control = 0;
+	u32 prev_enable = 0;
 
 	if (!switch_priv->regmap) {
 		dev_err(switch_priv->dev, "%s: regmap invalid\n", __func__);
@@ -299,9 +353,14 @@ static int typec_switch_usbc_analog_setup_switches(struct typec_switch_priv *swi
 	/* add all modes FSA should notify for in here */
 	case TYPEC_ACCESSORY_AUDIO:
 		/* activate switches */
-		typec_switch_usbc_update_settings(switch_priv, 0x00, 0x9F);
+		/* DIO4483: Optimize headset buttons abnormal problem */
+		if (switch_priv->vendor == DIO4483) {
+			typec_switch_usbc_update_settings_dio4483(switch_priv, 0x00, 0x9F);
+		} else {
+			typec_switch_usbc_update_settings(switch_priv, 0x00, 0x9F);
+		}
 /* Add DIO4480 support */
-		if((switch_priv->vendor != DIO4480) && (switch_priv->vendor != DIO4483)) {
+		if ((switch_priv->vendor != DIO4480) && (switch_priv->vendor != DIO4483)) {
 			/* Add for open auto mic DET */
 			usleep_range(1000, 1005);
 			regmap_write(switch_priv->regmap, DEFAULT_REG_FUN_EN, 0x45);
@@ -317,6 +376,12 @@ static int typec_switch_usbc_analog_setup_switches(struct typec_switch_priv *swi
 				usleep_range(4000, 4005);
 			}
 		}
+
+		/* DIO4483: Optimize headset buttons abnormal problem */
+		if (switch_priv->vendor == DIO4483) {
+			usleep_range(10000, 10005);
+		}
+
 		regmap_read(switch_priv->regmap, DEFAULT_REG_SWITCH_STATUS0, &switch_status);
 		dev_info(dev, "%s: reg[0x%x]=0x%x.\n", __func__, DEFAULT_REG_SWITCH_STATUS0, switch_status);
 		regmap_read(switch_priv->regmap, DEFAULT_REG_SWITCH_STATUS1, &switch_status);
@@ -702,7 +767,12 @@ int typec_switch_switch_event(struct device_node *node,
 			switch_control = 0x0;
 		else
 			switch_control = 0x7;
-		typec_switch_usbc_update_settings(switch_priv, switch_control, 0x9F);
+		/* DIO4483: Optimize headset buttons abnormal problem */
+		if (switch_priv->vendor == DIO4483) {
+			typec_switch_usbc_update_settings_dio4483(switch_priv, switch_control, 0x9F);
+		} else {
+			typec_switch_usbc_update_settings(switch_priv, switch_control, 0x9F);
+		}
 		break;
 
 /* Add DIO4480 support */

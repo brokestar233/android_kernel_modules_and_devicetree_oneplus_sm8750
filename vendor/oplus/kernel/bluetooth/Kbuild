@@ -1,0 +1,2 @@
+# add for btuart ux
+obj-y += btuart/

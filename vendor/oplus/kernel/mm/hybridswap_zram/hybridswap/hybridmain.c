@@ -532,8 +532,7 @@ unsigned long memcg_anon_pages(struct mem_cgroup *memcg)
 
 static bool inactive_file_is_low(struct mem_cgroup *memcg)
 {
-	unsigned long nr_inactive_file = memcg_page_state_local(memcg, NR_INACTIVE_FILE);
-	return nr_inactive_file < (SZ_512M + SZ_256M) / PAGE_SIZE;
+	return global_node_page_state(NR_INACTIVE_FILE) < (SZ_512M + SZ_256M) / PAGE_SIZE;
 }
 
 /* Shrink by free a batch of pages */
@@ -545,10 +544,10 @@ static int force_shrink_batch(struct mem_cgroup * memcg,
 {
 	int ret = 0;
 	gfp_t gfp_mask = GFP_KERNEL;
+	bool file = !(reclaim_options & MEMCG_RECLAIM_MAY_SWAP);
 
 	while (*nr_reclaimed < nr_need_reclaim) {
-		if (reclaim_options != MEMCG_RECLAIM_MAY_SWAP &&
-		    inactive_file_is_low(memcg))
+		if (file && inactive_file_is_low(memcg))
 			break;
 
 		unsigned long reclaimed;

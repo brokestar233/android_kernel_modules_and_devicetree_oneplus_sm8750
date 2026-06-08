@@ -903,8 +903,8 @@
 	/* fps-switch */
 	qcom,mdss-dsi-pan-enable-dynamic-fps;
 	qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode_both_hv_porch";
-	qcom,dsi-supported-dfps-list = <165  144    120    90    60    30>;
-	qcom,dsi-dfps-hfp-list       = <12   68     156    164   156   1196>;
+	qcom,dsi-supported-dfps-list = <120  144    165    90    60    30>;
+	qcom,dsi-dfps-hfp-list       = <156   68    12    164   156   1196>;
 	qcom,dsi-dfps-hbp-list       = <16   16     16     16    16    560>;
 	qcom,dsi-dfps-hpw-list       = <16   16     16     16    16    16>;
 	qcom,dsi-dfps-vfp-list       = <80   80     80     980   2960  80>;

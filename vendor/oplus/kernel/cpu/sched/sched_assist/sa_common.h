@@ -788,6 +788,7 @@ void set_im_flag_with_bit(int im_flag, struct task_struct *task);
 void android_vh_cgroup_set_task_handler(void *unused, int ret, struct task_struct *task);
 /* register vendor hook in kernel/signal.c  */
 void android_vh_exit_signal_handler(void *unused, struct task_struct *p);
+void sched_setaffinity_tracking(struct task_struct *task, const struct cpumask *in_mask);
 void android_rvh_set_cpus_allowed_comm_handler(void *unused, struct task_struct *task, const struct cpumask *new_mask);
 void android_rvh_setscheduler_handler(void *unused, struct task_struct *p);
 #if IS_ENABLED(CONFIG_OPLUS_SCHED_GROUP_OPT)

@@ -32,7 +32,7 @@
 #define POINT_DATA_CHECKSUM_LEN 65
 #define NVT_TOUCH_ESD_CHECK_PERIOD (2000)
 #define NVT_ID_BYTE_MAX 6
-#define POINT_DATA_LEN 120
+#define POINT_DATA_LEN 296    /* coord 120bytes + dummy 136bytes (aligned 256byes) + edge reject 40bytes */
 #define SIZE_4KB 4096
 #define FLASH_SECTOR_SIZE SIZE_4KB
 /*#define FW_BIN_VER_OFFSET (fw_need_write_size - SIZE_4KB)*/
@@ -65,6 +65,7 @@
 #define DOUSWIP_DETECT                  34
 #define PEN_DETECT                      25
 
+#define EVENTBUFFER_INJECT_WDT_RESET     0x24       /*inject watchdog reset*/
 #define EVENTBUFFER_PWR_PLUG_IN          0x53
 #define EVENTBUFFER_PWR_PLUG_OUT         0x51
 #define EVENTBUFFER_HOPPING_POLLING_ON   0x73
@@ -106,6 +107,7 @@
 #define EVENTBUFFER_EXT_NOTIFY_KEYBOARD_OPEN      0x26       /*notify keyboard open event during screenOn*/
 #define EVENTBUFFER_EXT_PEN_JITTER_LEVEL          0x25
 #define EVENTBUFFER_EXT_TOUCH_LEAVE_JITTER        0X29
+#define EVENTBUFFER_EXT_SET_PACKAGE_TYPE          0x2A
 #define PEN_CTL_FEEDBACK                          0xffff
 
 #define NVT_TOUCH_FW_DEBUG_INFO (1)

@@ -65,6 +65,12 @@
 		oplus,plc_strategy-data = <&cp_2t1_simple_strategy>;
 		oplus,plc_strategy-names = "default";
 
+		oplus,temperature_strategy_name = "cgcl";
+ 		oplus,temperature_strategy_data = <OPLUS_STRATEGY_USE_SHELL_TEMP
+ 						0   430 11000 1 0
+ 						428 435 3000 2 0
+ 						430 435 2000 2 1>;
+
 		pps_third_lcf_strategy {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_SHELL_TEMP>;
 			oplus,temp_range = <0 50 120 160 210 380 440>;

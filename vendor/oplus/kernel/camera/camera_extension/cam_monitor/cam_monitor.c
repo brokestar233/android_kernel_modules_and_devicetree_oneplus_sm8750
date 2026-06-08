@@ -883,21 +883,27 @@ void check_power_exception(struct monitor_check *r)
 	list_for_each_entry_safe(csd,csd_tem, &cam_req_mgr_ordered_sd_list, list) {
 		if (csd->ent_function == CAM_SENSOR_DEVICE_TYPE) {
 			s_ctrl = v4l2_get_subdevdata(&csd->sd);
+			if (!s_ctrl)
+				continue;
 
 			for (i = 0; i < s_ctrl->soc_info.num_rgltr; i++) {
-				if (regulator_is_enabled(s_ctrl->soc_info.rgltr[i]) &&
-					(!strstr(s_ctrl->soc_info.rgltr[i]->rdev->desc->name,
-						"regulator-dummy") &&
-					 !strstr(s_ctrl->soc_info.rgltr[i]->rdev->desc->name,
-						"cam_cc_titan_top_gdsc"))) {
-					r->count_enabled_regulator ++;
-					CAM_EXT_ERR(CAM_EXT_UTIL,
-						"Enabled regulator name:%s_%s: %s use_cont %d",
-						s_ctrl->sensor_name,
-						s_ctrl->soc_info.rgltr_name[i],
-						s_ctrl->soc_info.rgltr[i]->rdev->desc->name,
-						s_ctrl->soc_info.rgltr[i]->rdev->use_count);
-				}
+				struct regulator *rgltr = s_ctrl->soc_info.rgltr[i];
+
+				if (!rgltr || !rgltr->rdev || !rgltr->rdev->desc)
+					continue;
+				if (!regulator_is_enabled(rgltr))
+					continue;
+				if (strstr(rgltr->rdev->desc->name, "regulator-dummy") ||
+				    strstr(rgltr->rdev->desc->name, "cam_cc_titan_top_gdsc"))
+					continue;
+
+				r->count_enabled_regulator++;
+				CAM_EXT_ERR(CAM_EXT_UTIL,
+					"Enabled regulator name:%s_%s: %s use_cont %d",
+					s_ctrl->sensor_name,
+					s_ctrl->soc_info.rgltr_name[i],
+					rgltr->rdev->desc->name,
+					rgltr->rdev->use_count);
 			}
 		}
 	}

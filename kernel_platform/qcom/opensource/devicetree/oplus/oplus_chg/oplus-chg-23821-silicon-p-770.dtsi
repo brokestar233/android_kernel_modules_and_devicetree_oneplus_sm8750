@@ -26,6 +26,10 @@
 		oplus_spec,ffc-temp-thr = <120 210 350 440>;
 		oplus_spec,wired-ffc-step-max = <2>;
 		oplus_spec,wired-ffc-fv-mv = <4590 4590>;
+		oplus_spec,bdd-vbatdiff-mv = <50>;
+		oplus_spec,bdd-enter-current-ma = <100>;
+		oplus_spec,bdd-enter-voltage-mv = <200>;
+		oplus_spec,bdd-vbatdiff-timeout-min = <10080>;
 
 		oplus_spec,wired-ffc-fv-cutoff-mv = <4550 4525 4490
 						     4520 4505 4475>;
@@ -87,9 +91,12 @@
 		smooth_strategy {
 			oplus_spec,reserve_table_centipercent =
 				/* start(%) end(%) dischg_reserve(0.01%) full_reserve(0.01%) chg_reserve(0.01%) chg_split(%) */
-				<0   20  0   0   200 100>,
-				<21  99  200 0   200 100>,
-				<100 100 200 0   200 100>;
+				<0   20  0   0   (-200) 90>,
+				<21  80  200 0   (-200) 90>,
+				<81  84  200 0   (-100) 90>,
+				<85  99  200 0   200    100>,
+				<100 100 200 0   200    100>;
+			oplus,enable_secondary_smooth_map_update;
 		};
 	};
 };

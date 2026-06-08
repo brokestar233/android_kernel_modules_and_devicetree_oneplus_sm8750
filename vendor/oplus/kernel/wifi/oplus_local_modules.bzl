@@ -1,5 +1,6 @@
-load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
-load("//build/kernel/oplus:oplus_modules_define.bzl", "define_oplus_ddk_module", "bazel_support_platform", "oplus_ddk_get_kernel_version")
+load("//build/kernel/kleaf:kernel.bzl", "checkpatch", "ddk_headers", "ddk_module")
+load("//build/kernel/oplus:oplus_modules_define.bzl", "oplus_ddk_get_target", "define_oplus_ddk_module",
+ "oplus_ddk_get_kernel_version", "bazel_support_platform", "oplus_ddk_get_variant")
 load("//build/kernel/oplus:oplus_modules_dist.bzl", "ddk_copy_to_dist_dir")
 
 def version_compare(v1, v2):
@@ -71,12 +72,30 @@ def define_oplus_local_modules():
             copts = copts,
         )
 
+        define_oplus_ddk_module(
+            name = "wonder",
+            srcs = native.glob([
+                "**/*.h",
+                "wonder/band_config.c",
+                "wonder/debugfs.c",
+                "wonder/mac80211.c",
+                "wonder/mac80211_txs.c",
+                "wonder/main.c",
+                "wonder/nl80211_ven_cmd.c",
+                "wonder/ssr.c",
+                "wonder/wondertap.c",
+            ]),
+            out = "wonder.ko",
+            includes = ["."],
+        )
+
         module_list = [
             "oplus_connectivity_routerboost",
             "oplus_connectivity_sla",
             "oplus_wifi_wsa",
             "oplus_wificapcenter",
             "oplus_wifi_swtp",
+            "wonder",
         ]
 
     else :
@@ -87,12 +106,46 @@ def define_oplus_local_modules():
             "oplus_wificapcenter",
         ]
 
+        # QCOM only: used to form labels into //soc-repo:{target}_{variant}/
+        if bazel_support_platform == "qcom" :
+            _KERNEL_BUILD_VARIANT = "{}_{}".format(oplus_ddk_get_target(), oplus_ddk_get_variant())
+            target = oplus_ddk_get_target()
+
+            if target == "canoe":
+                wonder_ko_deps = [
+                    "//soc-repo:{}/net/wireless/cfg80211".format(_KERNEL_BUILD_VARIANT),
+                    "//soc-repo:{}/net/mac80211/mac80211".format(_KERNEL_BUILD_VARIANT),
+                ]
+
+                define_oplus_ddk_module(
+                    name = "wonder",
+                    srcs = native.glob([
+                        "**/*.h",
+                        "wonder/band_config.c",
+                        "wonder/debugfs.c",
+                        "wonder/mac80211.c",
+                        "wonder/mac80211_txs.c",
+                        "wonder/main.c",
+                        "wonder/nl80211_ven_cmd.c",
+                        "wonder/ssr.c",
+                        "wonder/wondertap.c",
+                    ]),
+                    out = "wonder.ko",
+                    ko_deps = wonder_ko_deps,
+                    includes = ["."],
+                )
+
+                module_list = module_list + [
+                    "wonder",
+                ]
+
     ddk_headers(
         name = "config_headers",
-        hdrs  = native.glob([
+        hdrs = native.glob([
             "**/*.h",
-        ]),
-        includes = ["."],
+        ]) + [
+            "wonder/Makefile.include",
+        ],
     )
 
     ddk_copy_to_dist_dir(

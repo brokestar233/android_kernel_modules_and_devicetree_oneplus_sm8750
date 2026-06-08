@@ -100,7 +100,7 @@
 		deep_spec,support;
 		deep_spec,uv_thr = <2750>;
 		deep_spec,count_thr = <50>;
-		deep_spec,vbat_soc = <20>;
+		deep_spec,vbat_soc = <80>;
 		deep_spec,count_step = <0 10 0
 					350 12 1
 					450 15 2
@@ -122,14 +122,14 @@
 		deep_spec,ddbc_curve {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_BATT_TEMP>;
 			oplus,temp_range = <(-100) 0 200>;
-			deep_spec,ddbc_temp_cold = <500 3310 5
-						   10000 3260 2>;
-			deep_spec,ddbc_temp_cool = <500 3310 5
-						   10000 3260 2>;
-			deep_spec,ddbc_temp_normal = <500 3310 5
-						   10000 3260 2>;
-			deep_spec,ddbc_temp_warm = <500 3310 5
-						   10000 3260 2>;
+			deep_spec,ddbc_temp_cold = <500 3250 5
+						   10000 3200 2>;
+			deep_spec,ddbc_temp_cool = <500 3250 5
+						   10000 3200 2>;
+			deep_spec,ddbc_temp_normal = <500 3250 5
+						   10000 3200 2>;
+			deep_spec,ddbc_temp_warm = <500 3250 5
+						   10000 3200 2>;
 		};
 		ddrc_strategy {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_BATT_TEMP>;
@@ -615,7 +615,7 @@
 			18000		/* OPLUS_WIRED_CHG_MODE_QC */
 			18000		/* OPLUS_WIRED_CHG_MODE_PD */
 		>;
-		oplus_spec,led_on-fccmax-ma = <0 722 2200 3618 4400 4400 4400 1000 0>;
+		oplus_spec,led_on-fccmax-ma = <0 722 2170 3618 4400 4400 4400 1000 0>;
 		oplus_spec,fccmax-ma-lv = <
 			0 521 2200 2200 2200 2200 2200 2200 0	/* OPLUS_WIRED_CHG_MODE_UNKNOWN */
 			0 600  600  600  600  600  600  600 0	/* OPLUS_WIRED_CHG_MODE_SDP */
@@ -670,7 +670,7 @@
 		oplus_spec,non-standard-hw-fv-inc-mv = <18>;
 		oplus_spec,non-standard-sw-over-fv-mv = <3990>;
 		oplus_spec,non-standard-vbatdet-mv = <3680>;
-		oplus_spec,wired-vbatdet-mv = <0 4220 4319 4420 4420 4420 4400 4030 0>;
+		oplus_spec,wired-vbatdet-mv = <0 4220 4320 4420 4420 4420 4400 4030 0>;
 		oplus_spec,fcc-gear-thr-mv = <3980>;
 		oplus_spec,fcc-gear-shake-mv = <400 400 400 300 300 180 180 180 180>;
 		oplus_spec,vbatt-ov-thr-mv = <4600>;

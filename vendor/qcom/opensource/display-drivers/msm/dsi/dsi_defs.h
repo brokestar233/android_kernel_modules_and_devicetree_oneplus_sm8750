@@ -744,6 +744,15 @@ struct dsi_display_mode_priv_info {
 	 */
 	struct oplus_display_mode_priv_info oplus_priv_info;
 #endif /* OPLUS_FEATURE_DISPLAY */
+#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
+	bool oplus_ofp_need_to_separate_backlight;
+	bool oplus_ofp_need_to_sync_data_in_aod_unlocking;
+	unsigned int oplus_ofp_backlight_on_period;
+	unsigned int oplus_ofp_hbm_on_period;
+	unsigned int oplus_ofp_aod_off_insert_black_frame;
+	unsigned int oplus_ofp_aod_off_black_frame_total_time;
+	unsigned int oplus_ofp_hbm_on_period_in_timing_swtch;
+#endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 #ifdef OPLUS_FEATURE_DISPLAY_ADFR
 	unsigned int *oplus_adfr_min_fps_mapping_table;
 	unsigned char oplus_adfr_min_fps_mapping_table_count;
@@ -759,15 +768,6 @@ struct dsi_display_mode_priv_info {
 	unsigned int *oplus_adfr_hw_stabilize_frame_config_table;
 	unsigned int oplus_adfr_hw_stabilize_frame_config_table_count;
 #endif /* OPLUS_FEATURE_DISPLAY_HIGH_PRECISION */
-#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
-	bool oplus_ofp_need_to_separate_backlight;
-	bool oplus_ofp_need_to_sync_data_in_aod_unlocking;
-	unsigned int oplus_ofp_backlight_on_period;
-	unsigned int oplus_ofp_hbm_on_period;
-	unsigned int oplus_ofp_aod_off_insert_black_frame;
-	unsigned int oplus_ofp_aod_off_black_frame_total_time;
-	unsigned int oplus_ofp_hbm_on_period_in_timing_swtch;
-#endif /* OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT */
 };
 
 /**

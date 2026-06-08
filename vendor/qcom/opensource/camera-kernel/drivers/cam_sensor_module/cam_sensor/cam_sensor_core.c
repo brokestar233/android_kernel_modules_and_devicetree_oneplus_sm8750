@@ -13,6 +13,7 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 #include "cam_req_mgr_dev.h"
+#include "cam_req_mgr.h"
 
 #define CAM_SENSOR_PIPELINE_DELAY_MASK        0xFF
 #define CAM_SENSOR_MODESWITCH_DELAY_SHIFT     8
@@ -60,6 +61,34 @@ static int cam_sensor_notify_v4l2_error_event(
 
 	return rc;
 }
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+int oplus_cam_sensor_notify_rfi_service(struct cam_sensor_ctrl_t *s_ctrl)
+{
+	struct cam_req_mgr_message req_msg = {0};
+	int rc = 0;
+
+	req_msg.session_hdl = s_ctrl->bridge_intf.session_hdl;
+	req_msg.u.err_msg.device_hdl = s_ctrl->bridge_intf.device_hdl;
+	req_msg.u.err_msg.link_hdl = s_ctrl->bridge_intf.link_hdl;
+	req_msg.u.err_msg.error_type = s_ctrl->id;
+	req_msg.u.err_msg.request_id = s_ctrl->last_applied_req;
+	req_msg.u.err_msg.resource_size = 0x0;
+	req_msg.u.err_msg.error_code = CAM_REQ_MGR_IIC_ERR_ACTUATOR_FAIL;
+	rc = cam_req_mgr_notify_message(&req_msg,
+		V4L_EVENT_CAM_REQ_MGR_NODE_EVENT,
+		V4L_EVENT_CAM_REQ_MGR_EVENT);
+	CAM_ERR(CAM_SENSOR, "Notifying v4l2 error [type: %u code: %u] failed on %d id%s", req_msg.u.err_msg.error_type, req_msg.u.err_msg.error_code, s_ctrl->id, s_ctrl->device_name);
+
+	if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR, "send event failed! rc %d", rc);
+	} else {
+		CAM_ERR(CAM_ACTUATOR, "send event success! rc%d", rc);
+	}
+
+	return rc;
+}
+#endif
 
 static int cam_sensor_notify_msg_req_mgr(
 	enum cam_req_mgr_msg_type msg_type,
@@ -2416,6 +2445,12 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 						"Failed to apply settings: %d",
 						rc);
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
+					if (-110 == rc) {
+  						//Set Notify Rfi Reduced power
+						CAM_ERR(CAM_ACTUATOR, "notify RFI to reduce Frequency");
+						oplus_cam_sensor_notify_rfi_service(s_ctrl);
+						return rc;
+					}
 					trace_end();
 #endif
 					return rc;
@@ -2465,6 +2500,14 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 					CAM_ERR(CAM_SENSOR,
 						"Failed to apply settings: %d",
 						rc);
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+					if (-110 == rc) {
+							//Set Notify Rfi Reduced power
+							CAM_ERR(CAM_ACTUATOR, "notify RFI to reduce Frequency");
+							oplus_cam_sensor_notify_rfi_service(s_ctrl);
+							return rc;
+						}
+#endif
 					return rc;
 				}
 			}

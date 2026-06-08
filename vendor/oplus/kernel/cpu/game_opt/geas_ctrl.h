@@ -35,8 +35,12 @@ struct frame_drive_params {
 	int sve;
 	int sips;
 	int smt;
+	int lsamplems;
+	int dsamplems;
+	int liopct;
+	int diopct;
 	int smz[DDR_OPP_CNT];
-	int resv[2];
+	int resv[4];
 };
 
 struct gpu_params {
@@ -47,12 +51,12 @@ struct gpu_params {
 	int ascale;
 	int fmin;
 	int fmax;
-	int resv[2];
+	int resv[4];
 };
 
 struct emi_params {
 	int opp;
-	int resv[2];
+	int resv[4];
 };
 
 struct memlat_params {
@@ -60,7 +64,7 @@ struct memlat_params {
 	int limax;
 	int dimin;
 	int dimax;
-	int resv[2];
+	int resv[4];
 };
 
 struct bwmon_params {
@@ -71,7 +75,11 @@ struct bwmon_params {
 	int dimin;
 	int dimax;
 	int dascale;
-	int resv[2];
+	int lsamplems;
+	int dsamplems;
+	int liopct;
+	int diopct;
+	int resv[4];
 };
 
 struct npu_params {
@@ -81,7 +89,7 @@ struct npu_params {
 	int amax;
 	int fmin;
 	int fmax;
-	int resv[2];
+	int resv[4];
 };
 
 struct geas_params {
@@ -92,6 +100,7 @@ struct geas_params {
 	struct memlat_params memlat_datas;
 	struct gpu_params gpu_datas;
 	struct npu_params npu_datas;
+	int resv[4];
 };
 
 #define CMD_ID_UPDATE_GEAS_PARAMS \

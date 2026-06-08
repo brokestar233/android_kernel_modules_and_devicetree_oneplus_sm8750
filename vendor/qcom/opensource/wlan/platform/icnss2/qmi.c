@@ -60,6 +60,13 @@ enum REGION_VERSION {
 
 //Modify for:Loading India BDF match from nv region
 #define REGION_IN_NV	0x1b
+
+//Add for loading Mexico BDF match from MX region_nv
+//In Zenith project flags LATAM is 10011010=0x9A / MX-TELCEL is 01111010=0x7A
+#define REGION_MX_NV		0x9A
+#define REGION_MX_TEL_NV	0x7A
+#define PROJECT_ID_ZENITH	25689
+
 #endif /* OPLUS_FEATURE_WIFI_BDF */
 
 #define WLFW_SERVICE_WCN_INS_ID_V01	3
@@ -70,6 +77,7 @@ enum REGION_VERSION {
 #define BDF_FILE_NAME_PREFIX		"bdwlan"
 #define ELF_BDF_FILE_NAME		"bdwlan.elf"
 #define ELF_BDF_FILE_NAME_CN		"bdwlan_cn.elf"
+#define ELF_BDF_FILE_NAME_MX		"bdwlan_mx.elf"
 #define ELF_BDF_FILE_NAME_PREFIX	"bdwlan.e"
 #define BIN_BDF_FILE_NAME		"bdwlan.bin"
 #define BIN_BDF_FILE_NAME_PREFIX	"bdwlan."
@@ -1161,6 +1169,16 @@ static bool is_prj_support_region_nv_id(void) {
     return false;
 }
 
+static bool is_prj_support_mx_region_nv_id(void) {
+    int project_id = get_project();
+    icnss_pr_info("the project support mexico region nv is: %d\n", project_id);
+
+    if (project_id == PROJECT_ID_ZENITH) {
+        return true;
+    }
+    return false;
+}
+
 static int get_regionid_from_cmdline(void)
 {
     struct device_node *np;
@@ -1220,6 +1238,15 @@ static void cnss_get_oplus_bdf_file_name(char* file_name, u32 filename_len) {
         if (region_nv_id == REGION_IN_NV) {
             snprintf(file_name, filename_len, BDF_FILE_IN);
         } else {
+            snprintf(file_name, filename_len, ELF_BDF_FILE_NAME);
+        }
+    } else if (is_prj_support_mx_region_nv_id()) {
+        region_nv_id = get_regionid_from_cmdline();
+        if (region_nv_id == REGION_MX_NV || region_nv_id == REGION_MX_TEL_NV) {
+            icnss_pr_info("Detected Mexico region, using Mexico BDF\n");
+            snprintf(file_name, filename_len, ELF_BDF_FILE_NAME_MX);
+        } else {
+            icnss_pr_info("Using default BDF for region_nv_id: %d\n", region_nv_id);
             snprintf(file_name, filename_len, ELF_BDF_FILE_NAME);
         }
     } else {

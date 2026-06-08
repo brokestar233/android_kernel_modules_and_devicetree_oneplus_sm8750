@@ -2486,7 +2486,6 @@
 
 		qcom,bypass-pbl-rst-wa;
 		qcom,max-cpus = <8>;
-		qcom,enforce-high-irq-cpus;
 
 		msi-parent = <&gic_its 0x60>;
 

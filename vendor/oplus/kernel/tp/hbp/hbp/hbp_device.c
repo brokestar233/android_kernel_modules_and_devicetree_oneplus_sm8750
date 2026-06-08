@@ -49,6 +49,8 @@
 /*fpGripStatus*/
 #define HBP_IOCTRL_FP_GRIP_STATUS          _IO(HBP_IOCTRL_GROUP, 0x22)
 
+#define HBP_IOCTRL_IRQ_FREE                _IO(HBP_IOCTRL_GROUP, 0x23)
+
 extern void hbp_state_notify(struct hbp_core *hbp, int id, hbp_panel_event event);
 extern int hbp_register_notify_cb(struct hbp_device *hbp_dev, struct device *dev);
 extern void hbp_power_ctrl(struct hbp_device *hbp_dev, struct power_sequeue sq[]);
@@ -307,10 +309,60 @@ static void hbp_queue_init(struct frame_queue *queue)
 	queue->waitq_flag = QUEUE_WAIT;
 }
 
+static hbp_panel_event hbp_panel_event_convert(hbp_panel_event event)
+{
+	//TODO:
+	//(1) if oncell panel, ignore suspend event, only use early suspend event
+	//to avoid repeat early suspend or suspend event
+	//(2) if tddi ic, need update
+	if (event == HBP_PANEL_EVENT_SUSPEND) {
+		return HBP_PANEL_EVENT_EARLY_SUSPEND;
+	}
+
+	if (event == HBP_PANEL_EVENT_RESUME) {
+		return HBP_PANEL_EVENT_EARLY_RESUME;
+	}
+
+	return event;
+}
+
 static void hbp_panel_notify_callback(hbp_panel_event event, struct hbp_device *hbp_dev)
 {
+	if (!g_hbp) {
+		hbp_err("g_hbp is null\n");
+		return;
+	}
+	if (!hbp_dev) {
+		hbp_err("hbp_dev is null\n");
+		return;
+	}
 	if (event != HBP_PANEL_EVENT_UNKNOWN) {
-		hbp_state_notify(g_hbp, hbp_dev->id, event);
+		if (hbp_dev->id >= MAX_DEVICES || !g_hbp->devices[hbp_dev->id]) {
+		    hbp_err("invalid device id = %d \n", hbp_dev->id);
+		    return;
+		}
+		hbp_debug("notify id %d event %d\n", hbp_dev->id, event);
+
+		event = hbp_panel_event_convert(event);
+
+		/* Protect concurrent access to states[] and state_notify fields */
+		mutex_lock(&g_hbp->state_notify_mtx);
+		/* Check if same event is already processed or being processed */
+		if ((g_hbp->state_notify_id == hbp_dev->id &&
+		     g_hbp->state_notify_event == event)) {
+			mutex_unlock(&g_hbp->state_notify_mtx);
+			hbp_info("same screen notify event %d, ignore\n", event);
+			return;
+		}
+		g_hbp->state_notify_id = hbp_dev->id;
+		g_hbp->state_notify_event = event;
+		mutex_unlock(&g_hbp->state_notify_mtx);
+
+		if (g_hbp->state_notify_wq) {
+			queue_work(g_hbp->state_notify_wq, &g_hbp->state_notify_work);
+		} else {
+			hbp_err("state_notify_wq is null\n");
+		}
 	}
 }
 
@@ -332,7 +384,9 @@ struct hbp_device *hbp_device_create(void *priv,
 	}
 
 	hbp_dev->state = HBP_PANEL_EVENT_EARLY_RESUME;
+	mutex_lock(&hbp->state_notify_mtx);
 	hbp->states[id].state = hbp_dev->state;
+	mutex_unlock(&hbp->state_notify_mtx);
 	hbp_dev->priv = priv;
 	hbp_dev->dev_ops = dev_ops;
 	hbp_dev->dev = dev;
@@ -725,10 +779,6 @@ static irqreturn_t hbp_irq_handler(int irq, void *dev_id)
 
 	hbp_dev->top_irq_frame_tv.value[0] = ktime_get();
 
-	if (!hbp_dev->frame_insert_support && hbp_dev->i_dev) {
-		input_set_timestamp(hbp_dev->i_dev, hbp_dev->top_irq_frame_tv.value[0]);
-	}
-
 	return IRQ_WAKE_THREAD;
 }
 
@@ -756,7 +806,8 @@ static irqreturn_t hbp_irq_threaded_fn(int irq, void *dev_id)
 				|| reason == IRQ_REASON_RESET_PWR
 				|| reason == IRQ_REASON_RESET_FWUPDATE
 				|| reason == IRQ_REASON_RESPONSE
-				|| reason == IRQ_REASON_RESET_IDENTIFY) {
+				|| reason == IRQ_REASON_RESET_IDENTIFY
+				|| reason == IRQ_REASON_UPLINK_REPORT) {
 			goto report_frame;
 		}
 	}
@@ -852,7 +903,7 @@ static int hbp_register_irq_func(struct hbp_device *hbp_dev)
 		ret = request_threaded_irq(hbp_dev->irq,
 					   hbp_irq_handler,
 					   hbp_irq_threaded_fn,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)) || !defined(CONFIG_TOUCHPANEL_MTK_PLATFORM)
 					   hbp_dev->irq_flags | IRQF_ONESHOT,
 #else
 					   hbp_dev->irq_flags | IRQF_ONESHOT | IRQF_NO_SUSPEND,
@@ -998,6 +1049,12 @@ static int hbp_queue_config(unsigned int buf_size, struct frame_queue *queue)
 
 void hbp_set_irq_status(struct hbp_device *hbp_dev, bool en)
 {
+	if (hbp_dev->irq_freed == true) {
+	    disable_irq(hbp_dev->irq);
+	    hbp_dev->irq_enabled = false;
+	    return;
+	}
+
 	if (hbp_dev->irq_enabled != (!!en)) {
 		en ? enable_irq(hbp_dev->irq): disable_irq(hbp_dev->irq);
 		hbp_dev->irq_enabled = (!!en);
@@ -1056,7 +1113,12 @@ static long hbp_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigne
 		hbp_dev->drv_ack = usr.val;
 		break;
 	case HBP_IOCTRL_IRQ_ENABLE:
+		hbp_info("HBP_IOCTRL_IRQ_ENABLE:%lld\n", usr.val);
 		hbp_set_irq_status(hbp_dev, usr.val);
+		break;
+	case HBP_IOCTRL_IRQ_FREE:
+		hbp_info("HBP_IOCTRL_IRQ_FREE!");
+		hbp_unregister_irq(hbp_dev);
 		break;
 	case HBP_IOCTRL_START:
 		hbp_start_flow(NULL);
@@ -1228,10 +1290,10 @@ static struct file_operations hbp_ctrl_fops = {
 
 void hbp_set_irq_wake(struct hbp_device *hbp_dev, bool wake)
 {
-	if (wake) {
+	if (wake && hbp_dev->irq_freed == false) {
 		enable_irq_wake(hbp_dev->irq);
 	} else {
 		disable_irq_wake(hbp_dev->irq);
 	}
-	hbp_info("%s irq wake\n", wake?"enable":"disable");
+	hbp_info("%s irq wake; irq_freed %d\n", wake?"enable":"disable", hbp_dev->irq_freed);
 }

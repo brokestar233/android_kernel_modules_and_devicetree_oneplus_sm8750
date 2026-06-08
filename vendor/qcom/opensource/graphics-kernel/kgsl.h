@@ -301,8 +301,6 @@ struct kgsl_memdesc {
 	struct mutex ranges_lock;
 	/** @gmuaddr: GMU VA if this is mapped in GMU */
 	u32 gmuaddr;
-	/*@kgsl_dev: kgsl device dev instance */
-	struct device *kgsl_dev;
 	/*@shmem_page_list: shmem pages list */
 	struct list_head shmem_page_list;
 };
@@ -568,6 +566,8 @@ long gpumem_free_entry(struct kgsl_mem_entry *entry);
 enum kgsl_mmutype kgsl_mmu_get_mmutype(struct kgsl_device *device);
 
 /* Helper functions */
+unsigned long kgsl_get_align(struct kgsl_memdesc *memdesc);
+
 int kgsl_request_irq(struct platform_device *pdev, const  char *name,
 		irq_handler_t handler, void *data);
 

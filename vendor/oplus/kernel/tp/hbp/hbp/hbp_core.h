@@ -379,6 +379,13 @@ struct hbp_core {
 
 	bool in_hbp_mode;
 	struct exception_data    exception_data; /*exception_data monitor data*/
+
+	/* workqueue for state notify */
+	struct workqueue_struct *state_notify_wq;
+	struct work_struct state_notify_work;
+	struct mutex state_notify_mtx;  /* protect state_notify_id, state_notify_event and states[] */
+	int state_notify_id;
+	hbp_panel_event state_notify_event;
 };
 
 extern int hbp_exception_report(hbp_excep_type excep_tpye,
@@ -391,8 +398,7 @@ extern int hbp_register_devices(void *priv,
 extern int hbp_unregister_devices(void *priv);
 extern bool match_from_cmdline(struct device *dev, struct chip_info *info);
 extern void hbp_set_irq_wake(struct hbp_device *hbp_dev, bool wake);
-extern void hbp_dev_ctrl_power_reconfig(void);
-extern void hbp_dev_ctrl_hw_reset(void);
+extern void hbp_dev_power_type_ctrl(void *priv, enum power_type type, bool en);
 extern void hbp_dev_healthinfo_report(void *priv, char *report);
 /*
 #if 1

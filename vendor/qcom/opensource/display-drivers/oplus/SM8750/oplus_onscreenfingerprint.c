@@ -3504,6 +3504,7 @@ int oplus_ofp_power_mode_handle(void *dsi_display, int power_mode)
 				}
 			} else if (oplus_ofp_video_mode_30hz_aod_is_enabled() && !oplus_ofp_get_aod_state()) {
 				/*video mode 30hz aod,avoid screen flickering*/
+				oplus_set_aod_close_backlight_sync(display);
 				mutex_lock(&display->panel->panel_lock);
 				rc = dsi_panel_set_backlight(display->panel, 0);
 				if (rc) {
@@ -3552,6 +3553,8 @@ int oplus_ofp_power_mode_handle(void *dsi_display, int power_mode)
 	default:
 		OFP_DEBUG("power_mode:%d\n", power_mode);
 	}
+
+	display->panel->oplus_panel.last_power_mode = power_mode;
 
 	mutex_unlock(&oplus_ofp_lock);
 
@@ -4091,7 +4094,7 @@ int oplus_ofp_aod_off_backlight_recovery(void *sde_encoder_virt)
 
 	display = c_conn->display;
 
-	if (!display || !display->panel || !display->panel->oplus_panel.vendor_name) {
+	if (!display || !display->panel) {
 		OFP_ERR("Invalid display params\n");
 		return -EINVAL;
 	}
@@ -4107,7 +4110,7 @@ int oplus_ofp_aod_off_backlight_recovery(void *sde_encoder_virt)
 		p_oplus_ofp_params->aod_layer_disappeard_bl_ready = 0;
 	}
 
-	if ((!strcmp(display->panel->oplus_panel.vendor_name, "AE035")) &&  (hbm_enable & OPLUS_OFP_PROPERTY_FINGERPRESS_LAYER)) {
+	if ((display->panel->oplus_panel.disalbe_aod_recovery) &&  (hbm_enable & OPLUS_OFP_PROPERTY_FINGERPRESS_LAYER)) {
 		if (p_oplus_ofp_params->panel_hbm_status || new_aod_layer_status) {
 			if (last_aod_layer_status && !new_aod_layer_status) {
 				mutex_lock(&display->panel->panel_lock);

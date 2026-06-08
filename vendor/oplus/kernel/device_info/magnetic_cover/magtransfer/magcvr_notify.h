@@ -15,6 +15,11 @@ enum MAGCVR_CALL_PARA {
 	MAGCVR_CALL_IC_FAIL  = 101,
 };
 
+enum MAGCVR_INSTANCE_INDEX {
+	MAGCVR_INSTANCE_CHARGE = 0,
+	MAGCVR_INSTANCE_PEN = 1,
+};
+
 #include <linux/module.h>
 #include <linux/export.h>
 #include <linux/notifier.h>
@@ -27,7 +32,8 @@ struct magcvr_notify_event {
 int magcvr_event_register_notifier(struct notifier_block *nb);
 int magcvr_event_unregister_notifier(struct notifier_block *nb);
 int magcvr_event_call_notifier(unsigned long action, void *data);
-void magcvr_set_current_pos(int magcvr_pos);
+void magcvr_set_current_pos(int magcvr_index, int magcvr_pos);
 int magcvr_get_current_pos(void);
+int magcvr_get_current_pos_pen(void);
 
 #endif /* _MAGCVR_EVENTNOTIFY_H */
